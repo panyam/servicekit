@@ -120,7 +120,7 @@ func (c *ChatConn) OnStart(conn *websocket.Conn) error {
 		"connId":   c.ConnId(),
 		"username": c.username,
 		"room":     c.roomName,
-		"server":   "GoUtils Chat Server",
+		"server":   "ServiceKit Chat Server",
 	}
 	c.Writer.Send(conc.Message[any]{Value: welcome})
 

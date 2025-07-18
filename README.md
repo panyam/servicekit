@@ -1,10 +1,10 @@
-# GoUtils WebSocket Tutorial
+# ServiceKit WebSocket Tutorial
 
-A comprehensive guide to using the goutils WebSocket package for production-grade real-time applications.
+A comprehensive guide to using the servicekit WebSocket package for production-grade real-time applications.
 
 ## Overview
 
-The goutils WebSocket package provides a robust, production-ready framework for handling WebSocket connections with automatic connection management, ping-pong heartbeats, and lifecycle hooks. It's built on top of the Gorilla WebSocket library with additional abstractions for concurrent message handling.
+The servicekit WebSocket package provides a robust, production-ready framework for handling WebSocket connections with automatic connection management, ping-pong heartbeats, and lifecycle hooks. It's built on top of the Gorilla WebSocket library with additional abstractions for concurrent message handling.
 
 ## Key Features
 
@@ -66,7 +66,7 @@ import (
     "log"
     "net/http"
     "github.com/gorilla/mux"
-    gohttp "github.com/panyam/goutils/http"
+    gohttp "github.com/panyam/servicekit/http"
 )
 
 // Use the built-in JSONConn for simple JSON message handling
@@ -733,4 +733,4 @@ func (r *Room) Broadcast(message any, excludeId string) {
 }
 ```
 
-This tutorial provides a solid foundation for building production-ready WebSocket applications with the goutils package. The key is to leverage the built-in lifecycle hooks and connection management while implementing your application-specific logic in the message handlers.
+This tutorial provides a solid foundation for building production-ready WebSocket applications with the servicekit package. The key is to leverage the built-in lifecycle hooks and connection management while implementing your application-specific logic in the message handlers.
