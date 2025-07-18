@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
-	"github.com/panyam/goutils/conc"
+	conc "github.com/panyam/gocurrent"
 	gut "github.com/panyam/goutils/utils"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
