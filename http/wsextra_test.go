@@ -13,7 +13,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/panyam/goutils/conc"
+	conc "github.com/panyam/gocurrent"
 )
 
 // Test message types for comprehensive testing

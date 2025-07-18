@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/panyam/goutils/conc"
+	conc "github.com/panyam/gocurrent"
 	gut "github.com/panyam/goutils/utils"
 )
 

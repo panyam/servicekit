@@ -8,8 +8,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/panyam/goutils/conc"
-	gohttp "github.com/panyam/goutils/http"
+	conc "github.com/panyam/gocurrent"
+	gohttp "github.com/panyam/servicekit/http"
 )
 
 type TimeHandler struct {

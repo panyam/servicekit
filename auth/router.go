@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	gohttp "github.com/panyam/goutils/http"
 	"github.com/panyam/goutils/utils"
+	gohttp "github.com/panyam/servicekit/http"
 )
 
 type AuthConfig struct {
