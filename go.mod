@@ -6,7 +6,7 @@ require (
 	github.com/fernet/fernet-go v0.0.0-20211208181803-9f70042a33ee
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
-	github.com/panyam/gocurrent v0.0.2
+	github.com/panyam/gocurrent v0.0.9
 	github.com/panyam/goutils v0.1.8
 	google.golang.org/grpc v1.59.0
 	gorm.io/gorm v1.23.8

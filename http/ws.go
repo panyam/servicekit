@@ -122,7 +122,7 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 				}
 			}
 			break
-		case result := <-reader.RecvChan():
+		case result := <-reader.OutputChan():
 			conn.SetReadDeadline(time.Now().Add(config.PongPeriod))
 			lastReadAt = time.Now()
 			if result.Error != nil {
