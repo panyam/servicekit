@@ -1,10 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>gRPC-WebSocket Demo</title>
+    <title>gRPC-WebSocket Multiplayer Demo</title>
     <style>
         body { font-family: system-ui, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background: #f5f5f5; }
         h1 { color: #333; }
+        .game-banner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
+                       padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .game-banner h2 { margin: 0 0 10px 0; }
+        .game-banner .game-id { font-size: 24px; font-weight: bold; background: rgba(255,255,255,0.2);
+                                padding: 5px 15px; border-radius: 4px; display: inline-block; }
+        .game-banner p { margin: 10px 0 0 0; opacity: 0.9; }
         .section { background: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .section h3 { margin-top: 0; color: #2196F3; }
         .section p { color: #666; margin-bottom: 15px; }
@@ -22,36 +28,48 @@
         .log .info { color: #4CAF50; }
         .log .data { color: #64B5F6; }
         .log .ping { color: #9E9E9E; }
+        .log .player { color: #FFB74D; }
         .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
         .status.connected { background: #4CAF50; }
         .status.disconnected { background: #f44336; }
         code { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
         .client-info { background: #e3f2fd; border: 1px solid #bbdefb; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+        .multiplayer-tip { background: #fff3e0; border: 1px solid #ffe0b2; padding: 12px; border-radius: 4px; margin-bottom: 15px; }
+        .multiplayer-tip strong { color: #e65100; }
     </style>
 </head>
 <body>
-    <h1>gRPC-WebSocket Demo</h1>
-    <p>This demo shows the <code>grpcws</code> package for gRPC streaming over WebSocket using real protobuf messages.</p>
+    <h1>gRPC-WebSocket Multiplayer Demo</h1>
+
+    <div class="game-banner">
+        <h2>You're in game room:</h2>
+        <span class="game-id" id="current-game-id">loading...</span>
+        <p>Open this same URL in another browser tab to see multiplayer sync!</p>
+    </div>
+
+    <div class="multiplayer-tip">
+        <strong>Multiplayer Test:</strong> Open <code id="share-url">this URL</code> in multiple browser windows.
+        All windows will see each other's actions in real-time!
+    </div>
 
     <div class="client-info">
-        Using <code>@panyam/servicekit-client</code> library - GRPCWSClient handles protocol automatically (ping/pong, envelope wrapping).
+        Using <code>@panyam/servicekit-client</code> library - GRPCWSClient handles protocol automatically.
     </div>
 
     <div class="section">
-        <h3><span class="status disconnected" id="subscribe-status"></span>Server Streaming: Subscribe to Game Events</h3>
+        <h3><span class="status disconnected" id="subscribe-status"></span>Server Streaming: Shared Game Events</h3>
         <p>Pattern: <code>rpc Subscribe(SubscribeRequest) returns (stream GameEvent)</code><br>
-           Server pushes game events (score updates) every 2 seconds. Client only receives.</p>
-        <input type="text" id="subscribe-game-id" value="game123" placeholder="Game ID" style="width: 100px;">
-        <input type="text" id="subscribe-player-id" value="player1" placeholder="Player ID" style="width: 100px;">
-        <button class="connect" onclick="connectSubscribe()">Connect</button>
-        <button class="disconnect" onclick="disconnectSubscribe()">Disconnect</button>
+           All players in this game see: player joins, player leaves, and player actions!</p>
+        <input type="text" id="subscribe-player-id" placeholder="Your name" style="width: 150px;">
+        <button class="connect" onclick="connectSubscribe()">Join Game</button>
+        <button class="disconnect" onclick="disconnectSubscribe()">Leave Game</button>
         <div id="subscribe-log" class="log"></div>
     </div>
 
     <div class="section">
         <h3><span class="status disconnected" id="commands-status"></span>Client Streaming: Send Commands</h3>
         <p>Pattern: <code>rpc SendCommands(stream GameCommand) returns (CommandSummary)</code><br>
-           Client sends multiple commands. When done, server returns a summary of executed commands.</p>
+           Send multiple commands. When done, server returns a summary.</p>
         <input type="text" id="command-type" value="attack" placeholder="Command type" style="width: 100px;">
         <button class="connect" onclick="connectCommands()">Connect</button>
         <button class="send" onclick="sendCommand()">Send Command</button>
@@ -61,15 +79,15 @@
     </div>
 
     <div class="section">
-        <h3><span class="status disconnected" id="sync-status"></span>Bidirectional Streaming: Game Sync</h3>
+        <h3><span class="status disconnected" id="sync-status"></span>Bidirectional Streaming: Real-time Game Sync</h3>
         <p>Pattern: <code>rpc SyncGame(stream PlayerAction) returns (stream GameState)</code><br>
-           Full duplex: client sends player actions, server responds with updated game state.</p>
-        <input type="text" id="sync-player-id" value="player1" placeholder="Player ID" style="width: 100px;">
-        <button class="connect" onclick="connectSync()">Connect</button>
+           Send actions and see ALL players' states update! Open multiple tabs to see multiplayer.</p>
+        <input type="text" id="sync-player-id" placeholder="Your name" style="width: 150px;">
+        <button class="connect" onclick="connectSync()">Join Sync</button>
         <button class="send" onclick="sendMove()">Move</button>
-        <button class="send" onclick="sendAttack()">Attack</button>
-        <button class="send" onclick="sendUseItem()">Use Item</button>
-        <button class="disconnect" onclick="disconnectSync()">Disconnect</button>
+        <button class="send" onclick="sendAttack()">Attack (+10 score)</button>
+        <button class="send" onclick="sendUseItem()">Heal (+20 HP)</button>
+        <button class="disconnect" onclick="disconnectSync()">Leave</button>
         <div id="sync-log" class="log"></div>
     </div>
 
@@ -77,6 +95,16 @@
     <script src="/servicekit-client.js"></script>
 
     <script>
+        // Get gameId from URL path (e.g., /game123 -> game123)
+        const gameId = window.location.pathname.replace('/', '') || 'default';
+        document.getElementById('current-game-id').textContent = gameId;
+        document.getElementById('share-url').textContent = window.location.href;
+
+        // Generate a random player ID for this browser tab
+        const defaultPlayerId = 'player-' + Math.random().toString(36).substr(2, 6);
+        document.getElementById('subscribe-player-id').value = defaultPlayerId;
+        document.getElementById('sync-player-id').value = defaultPlayerId;
+
         // Use the ServiceKit client library
         const { GRPCWSClient } = ServiceKit;
 
@@ -97,17 +125,29 @@
             while (el.children.length > 100) el.removeChild(el.firstChild);
         }
 
-        // Subscribe (Server Streaming)
+        // Subscribe (Server Streaming) - Shows all game events to all players
         function connectSubscribe() {
             if (subscribeClient) subscribeClient.close();
 
-            const gameId = document.getElementById('subscribe-game-id').value || 'game123';
-            const playerId = document.getElementById('subscribe-player-id').value || 'player1';
+            const playerId = document.getElementById('subscribe-player-id').value || defaultPlayerId;
 
             subscribeClient = new GRPCWSClient();
 
             subscribeClient.onMessage = (data) => {
-                log('subscribe-log', 'Data: ' + JSON.stringify(data), 'data');
+                // Format the message nicely based on event type
+                let msg = 'Event: ';
+                if (data.eventType === 'player_joined') {
+                    msg = `Player "${data.playerJoined?.playerId}" joined! (${data.playerJoined?.playerCount} players now)`;
+                    log('subscribe-log', msg, 'player');
+                } else if (data.eventType === 'player_left') {
+                    msg = `Player "${data.playerLeft?.playerId}" left (${data.playerLeft?.playerCount} remaining)`;
+                    log('subscribe-log', msg, 'player');
+                } else if (data.eventType === 'player_action') {
+                    msg = `${data.playerAction?.playerId} did ${data.playerAction?.actionType}`;
+                    log('subscribe-log', msg, 'data');
+                } else {
+                    log('subscribe-log', 'Event: ' + JSON.stringify(data), 'data');
+                }
             };
 
             subscribeClient.onStreamEnd = () => {
@@ -127,13 +167,11 @@
                 log('subscribe-log', 'Ping ' + pingId, 'ping');
             };
 
-            subscribeClient.connect('ws://' + location.host + '/ws/v1/subscribe')
+            // Connect to gameId-specific endpoint
+            subscribeClient.connect('ws://' + location.host + '/ws/v1/' + gameId + '/subscribe?player_id=' + encodeURIComponent(playerId))
                 .then(() => {
-                    log('subscribe-log', 'Connected', 'info');
+                    log('subscribe-log', 'Joined game "' + gameId + '" as ' + playerId, 'info');
                     setStatus('subscribe-status', true);
-                    // Send initial subscribe request
-                    subscribeClient.send({ gameId: gameId, playerId: playerId });
-                    log('subscribe-log', 'Subscribed to game: ' + gameId, 'info');
                 })
                 .catch(err => {
                     log('subscribe-log', 'Connection failed: ' + err, 'error');
@@ -155,7 +193,9 @@
             commandsClient = new GRPCWSClient();
 
             commandsClient.onMessage = (data) => {
-                log('commands-log', 'Data: ' + JSON.stringify(data), 'data');
+                log('commands-log', 'Summary: received=' + data.commandsReceived +
+                    ', executed=' + data.commandsExecuted +
+                    ', failed=' + data.commandsFailed, 'data');
             };
 
             commandsClient.onStreamEnd = () => {
@@ -175,7 +215,7 @@
                 log('commands-log', 'Ping ' + pingId, 'ping');
             };
 
-            commandsClient.connect('ws://' + location.host + '/ws/v1/commands')
+            commandsClient.connect('ws://' + location.host + '/ws/v1/' + gameId + '/commands')
                 .then(() => {
                     log('commands-log', 'Connected - send commands then click "End Stream"', 'info');
                     setStatus('commands-status', true);
@@ -199,7 +239,7 @@
                 parameters: { target: 'enemy-' + (commandNum % 5) }
             };
             commandsClient.send(cmd);
-            log('commands-log', 'Sent command: ' + cmdType + ' (cmd-' + commandNum + ')', 'info');
+            log('commands-log', 'Sent: ' + cmdType + ' (cmd-' + commandNum + ')', 'info');
         }
 
         function endCommands() {
@@ -218,7 +258,7 @@
             }
         }
 
-        // Sync (Bidirectional Streaming)
+        // Sync (Bidirectional Streaming) - Shared game state
         function connectSync() {
             if (syncClient) syncClient.close();
             actionNum = 0;
@@ -226,7 +266,15 @@
             syncClient = new GRPCWSClient();
 
             syncClient.onMessage = (data) => {
-                log('sync-log', 'Data: ' + JSON.stringify(data), 'data');
+                // Show all players' states
+                if (data.players && data.players.length > 0) {
+                    const playerInfo = data.players.map(p =>
+                        `${p.playerId}: pos(${Math.round(p.x)},${Math.round(p.z)}) HP:${p.health} Score:${p.score}`
+                    ).join(' | ');
+                    log('sync-log', 'State: ' + playerInfo, 'data');
+                } else {
+                    log('sync-log', 'State: ' + JSON.stringify(data), 'data');
+                }
             };
 
             syncClient.onStreamEnd = () => {
@@ -246,9 +294,9 @@
                 log('sync-log', 'Ping ' + pingId, 'ping');
             };
 
-            syncClient.connect('ws://' + location.host + '/ws/v1/sync')
+            syncClient.connect('ws://' + location.host + '/ws/v1/' + gameId + '/sync')
                 .then(() => {
-                    log('sync-log', 'Connected - send actions to see game state updates', 'info');
+                    log('sync-log', 'Connected to shared game - actions affect all players!', 'info');
                     setStatus('sync-status', true);
                 })
                 .catch(err => {
@@ -262,7 +310,7 @@
                 return;
             }
             actionNum++;
-            const playerId = document.getElementById('sync-player-id').value || 'player1';
+            const playerId = document.getElementById('sync-player-id').value || defaultPlayerId;
             const msg = {
                 actionId: 'action-' + actionNum,
                 playerId: playerId,
@@ -273,18 +321,20 @@
         }
 
         function sendMove() {
-            sendAction({ move: { x: Math.random() * 100, y: 0, z: Math.random() * 100 } });
-            log('sync-log', 'Sent: Move', 'info');
+            const x = Math.round(Math.random() * 100);
+            const z = Math.round(Math.random() * 100);
+            sendAction({ move: { x: x, y: 0, z: z } });
+            log('sync-log', 'Sent: Move to (' + x + ', ' + z + ')', 'info');
         }
 
         function sendAttack() {
             sendAction({ attack: { targetId: 'enemy-1', weaponId: 'sword' } });
-            log('sync-log', 'Sent: Attack', 'info');
+            log('sync-log', 'Sent: Attack (+10 score)', 'info');
         }
 
         function sendUseItem() {
             sendAction({ useItem: { itemId: 'potion-1', targetId: 'self' } });
-            log('sync-log', 'Sent: Use Item', 'info');
+            log('sync-log', 'Sent: Use potion (+20 HP)', 'info');
         }
 
         function disconnectSync() {

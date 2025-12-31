@@ -13,12 +13,12 @@ import (
 )
 
 type TimeHandler struct {
-	Fanout *conc.FanOut[conc.Message[any]]
+	Fanout *conc.FanOut[gohttp.OutgoingMessage[any]]
 }
 
 // ... along with a corresponding New method
 func NewTimeHandler() *TimeHandler {
-	return &TimeHandler{Fanout: conc.NewFanOut[conc.Message[any]](nil)}
+	return &TimeHandler{Fanout: conc.NewFanOut[gohttp.OutgoingMessage[any]](nil)}
 }
 
 // The Validate method gates the subscribe request to see if it should be upgraded
@@ -64,7 +64,8 @@ func (t *TimeConn) OnTimeout() bool {
 func (t *TimeConn) HandleMessage(msg any) error {
 	log.Println("Received Message To Handle: ", msg)
 	// sending to all listeners
-	t.handler.Fanout.Send(conc.Message[any]{Value: msg})
+	var val any = msg
+	t.handler.Fanout.Send(gohttp.OutgoingMessage[any]{Data: &val})
 	return nil
 }
 
@@ -73,7 +74,8 @@ func main() {
 	timeHandler := NewTimeHandler()
 	r.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
 		msg := r.URL.Query().Get("msg")
-		timeHandler.Fanout.Send(conc.Message[any]{Value: fmt.Sprintf("%s: %s", time.Now().String(), msg)})
+		var msgVal any = fmt.Sprintf("%s: %s", time.Now().String(), msg)
+		timeHandler.Fanout.Send(gohttp.OutgoingMessage[any]{Data: &msgVal})
 		fmt.Fprintf(w, "Published Message Successfully")
 	})
 
@@ -83,7 +85,8 @@ func main() {
 		defer t.Stop()
 		for {
 			<-t.C
-			timeHandler.Fanout.Send(conc.Message[any]{Value: time.Now().String()})
+			var timeVal any = time.Now().String()
+			timeHandler.Fanout.Send(gohttp.OutgoingMessage[any]{Data: &timeVal})
 		}
 	}()
 

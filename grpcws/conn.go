@@ -66,16 +66,6 @@ func (c *GRPCWSCodec[Req, Resp]) Encode(msg ControlMessage) ([]byte, gohttp.Mess
 	return data, gohttp.TextMessage, err
 }
 
-// EncodePing creates a ping control message
-func (c *GRPCWSCodec[Req, Resp]) EncodePing(pingId int64, connId, name string) ([]byte, gohttp.MessageType, error) {
-	msg := ControlMessage{
-		Type:   TypePing,
-		PingId: pingId,
-	}
-	data, err := json.Marshal(msg)
-	return data, gohttp.TextMessage, err
-}
-
 // EncodeData wraps a proto response in a data message
 func (c *GRPCWSCodec[Req, Resp]) EncodeData(resp Resp) (ControlMessage, error) {
 	protoData, err := c.MarshalOptions.Marshal(resp)
@@ -207,6 +197,17 @@ func (c *baseGRPCConn) sendStreamEnd() {
 // OnStart initializes the base connection
 func (c *baseGRPCConn) OnStart(conn *websocket.Conn) error {
 	return c.BaseConn.OnStart(conn)
+}
+
+// SendPing sends a ping using the gRPC-WS ControlMessage envelope format.
+// This overrides BaseConn.SendPing to use the proper envelope protocol.
+func (c *baseGRPCConn) SendPing() error {
+	c.PingId++
+	c.SendOutput(ControlMessage{
+		Type:   TypePing,
+		PingId: c.PingId,
+	})
+	return nil
 }
 
 // OnClose cleans up the connection

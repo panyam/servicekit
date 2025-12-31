@@ -8,15 +8,45 @@ TypeScript client library for [ServiceKit](https://github.com/panyam/servicekit)
 npm install @panyam/servicekit-client
 ```
 
-## Overview
+## Architecture
 
-This package provides three client classes in a layered architecture:
+The client mirrors the server-side architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Transport Layer                          │
+│  • WebSocket connection management                          │
+│  • Ping/Pong heartbeats (always JSON)                       │
+│  • Error messages (always JSON)                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Codec Layer                            │
+│  • Data message encoding/decoding                           │
+│  • JSONCodec (default) - matches server JSONCodec           │
+│  • BinaryCodec - matches server BinaryProtoCodec            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key principle**: Control messages (ping/pong/error) are **always JSON text frames** at the transport layer, regardless of what codec is used for data messages. This ensures clients can always communicate even when using binary protocols.
+
+## Clients
 
 | Client | Use Case | Protocol |
 |--------|----------|----------|
-| `BaseWSClient` | Low-level WebSocket with auto ping/pong | Raw JSON messages |
+| `BaseWSClient` | Low-level WebSocket with auto ping/pong | Configurable codec |
 | `GRPCWSClient` | gRPC-style streaming | Envelope: `{type: "data", data: ...}` |
 | `TypedGRPCWSClient<TIn, TOut>` | Type-safe wrapper for GRPCWSClient | Same as GRPCWSClient |
+
+## Codecs
+
+| Codec | Server Codec | Wire Format |
+|-------|--------------|-------------|
+| `JSONCodec` (default) | `JSONCodec`, `TypedJSONCodec` | JSON text |
+| `BinaryCodec` | `BinaryProtoCodec` | Binary protobuf |
+
+**Important**: Client and server must use matching codecs!
 
 ## Quick Start
 
@@ -83,6 +113,34 @@ await client.connect('ws://localhost:8080/ws/v1/sync');
 client.send({ actionId: '1', move: { x: 10, y: 20 } });
 ```
 
+### Binary Protocol (BinaryProtoCodec)
+
+For high-throughput scenarios using binary protobuf (matches server `BinaryProtoCodec`):
+
+```typescript
+import { BaseWSClient, BinaryCodec } from '@panyam/servicekit-client';
+import { MyRequest, MyResponse } from './gen/my_pb';
+
+// Create a binary codec using your protobuf library's encode/decode functions
+const codec = new BinaryCodec<MyResponse, MyRequest>(
+  // Decode: ArrayBuffer -> MyResponse
+  (data) => MyResponse.decode(new Uint8Array(data)),
+  // Encode: MyRequest -> Uint8Array
+  (msg) => MyRequest.encode(msg).finish()
+);
+
+const client = new BaseWSClient({ codec });
+
+client.onMessage = (response: MyResponse) => {
+  console.log('Received:', response);
+};
+
+await client.connect('ws://localhost:8080/ws/binary');
+client.send(MyRequest.create({ id: 1, action: 'test' }));
+```
+
+**Note**: Even with binary data protocol, pings/pongs/errors are still JSON text frames. The transport layer handles this automatically.
+
 ## Streaming Patterns
 
 ### Server Streaming
@@ -138,27 +196,70 @@ client.endSend();
 
 ### BaseWSClient
 
-Low-level WebSocket client with automatic ping/pong.
+Low-level WebSocket client with automatic ping/pong and configurable codec.
 
 ```typescript
-class BaseWSClient {
+class BaseWSClient<I = unknown, O = unknown> {
+  // Constructor
+  constructor(options?: {
+    autoPong?: boolean;           // Auto-respond to pings (default: true)
+    WebSocket?: typeof WebSocket; // Custom WebSocket (for Node.js)
+    codec?: Codec<I, O>;          // Codec for data messages (default: JSONCodec)
+  })
+
   // Connection
   connect(url: string): Promise<void>
   close(): void
 
   // Sending
-  send(data: unknown): void      // JSON-encoded
-  sendRaw(message: string): void // Raw string
+  send(data: O): void                       // Encoded via codec
+  sendRaw(message: string | ArrayBuffer): void  // Bypass codec
 
   // Events
-  onMessage: (data: unknown) => void
+  onMessage: (data: I) => void
   onPing: (pingId: number) => void
   onClose: () => void
   onError: (error: string) => void
 
   // State
+  readonly codec: Codec<I, O>
   readonly isConnected: boolean
   readonly readyState: number
+}
+```
+
+### Codec Interface
+
+```typescript
+interface Codec<I, O> {
+  decode(data: string | ArrayBuffer): I;
+  encode(msg: O): string | ArrayBuffer;
+}
+```
+
+### JSONCodec
+
+Default codec for JSON text messages:
+
+```typescript
+class JSONCodec<I = unknown, O = unknown> implements Codec<I, O> {
+  decode(data: string | ArrayBuffer): I;  // JSON.parse
+  encode(msg: O): string;                  // JSON.stringify
+}
+```
+
+### BinaryCodec
+
+For binary protobuf messages:
+
+```typescript
+class BinaryCodec<I, O> implements Codec<I, O> {
+  constructor(
+    decodeFunc: (data: ArrayBuffer) => I,
+    encodeFunc: (msg: O) => Uint8Array
+  );
+  decode(data: string | ArrayBuffer): I;   // Calls decodeFunc
+  encode(msg: O): ArrayBuffer;             // Calls encodeFunc
 }
 ```
 

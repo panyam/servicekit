@@ -36,17 +36,26 @@ message GameEvent {
     PlayerLeft player_left = 11;
     ScoreUpdate score_update = 12;
     ChatMessage chat_message = 13;
+    PlayerActionEvent player_action = 14;
   }
 }
 
 message PlayerJoined {
   string player_id = 1;
   string player_name = 2;
+  int32 player_count = 3;
 }
 
 message PlayerLeft {
   string player_id = 1;
   string reason = 2;
+  int32 player_count = 3;
+}
+
+message PlayerActionEvent {
+  string player_id = 1;
+  string action_type = 2;
+  string action_id = 3;
 }
 
 message ScoreUpdate {

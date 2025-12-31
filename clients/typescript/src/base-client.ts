@@ -10,6 +10,8 @@
 import {
   ControlMessage,
   ClientOptions,
+  Codec,
+  JSONCodec,
   MessageHandler,
   ErrorHandler,
   VoidHandler,
@@ -34,12 +36,14 @@ import {
  * client.send({ hello: 'world' });
  * ```
  */
-export class BaseWSClient {
+export class BaseWSClient<I = unknown, O = unknown> {
   private ws: WebSocket | null = null;
-  private options: Required<ClientOptions>;
+  private _codec: Codec<I, O>;
+  private _autoPong: boolean;
+  private _WebSocket: typeof WebSocket;
 
-  /** Called when a message is received (excluding ping messages) */
-  public onMessage: MessageHandler = () => {};
+  /** Called when a data message is received (decoded by codec) */
+  public onMessage: MessageHandler<I> = () => {};
 
   /** Called when a ping is received (after auto-pong if enabled) */
   public onPing: (pingId: number) => void = () => {};
@@ -50,11 +54,15 @@ export class BaseWSClient {
   /** Called when a WebSocket error occurs */
   public onError: ErrorHandler = () => {};
 
-  constructor(options: ClientOptions = {}) {
-    this.options = {
-      autoPong: options.autoPong ?? true,
-      WebSocket: options.WebSocket ?? globalThis.WebSocket,
-    };
+  constructor(options: ClientOptions<I, O> = {}) {
+    this._autoPong = options.autoPong ?? true;
+    this._WebSocket = options.WebSocket ?? globalThis.WebSocket;
+    this._codec = options.codec ?? (new JSONCodec() as unknown as Codec<I, O>);
+  }
+
+  /** Get the codec used for encoding/decoding data messages */
+  get codec(): Codec<I, O> {
+    return this._codec;
   }
 
   /**
@@ -70,11 +78,14 @@ export class BaseWSClient {
       }
 
       try {
-        this.ws = new this.options.WebSocket(url);
+        this.ws = new this._WebSocket(url);
       } catch (error) {
         reject(error);
         return;
       }
+
+      // Set binary type for proper ArrayBuffer handling
+      this.ws.binaryType = 'arraybuffer';
 
       this.ws.onopen = () => {
         resolve();
@@ -97,21 +108,23 @@ export class BaseWSClient {
   }
 
   /**
-   * Send a raw JSON message to the server.
-   * @param data The data to send (will be JSON.stringify'd)
+   * Send a data message to the server using the configured codec.
+   * @param data The data to send (will be encoded by codec)
    */
-  send(data: unknown): void {
+  send(data: O): void {
     if (!this.ws || this.ws.readyState !== ReadyState.OPEN) {
       throw new Error('WebSocket is not connected');
     }
-    this.ws.send(JSON.stringify(data));
+    const encoded = this._codec.encode(data);
+    this.ws.send(encoded);
   }
 
   /**
-   * Send a raw string message to the server (no JSON encoding).
-   * @param message The raw string to send
+   * Send a raw message to the server (bypasses codec).
+   * Useful for control messages like pong.
+   * @param message The raw string or ArrayBuffer to send
    */
-  sendRaw(message: string): void {
+  sendRaw(message: string | ArrayBuffer): void {
     if (!this.ws || this.ws.readyState !== ReadyState.OPEN) {
       throw new Error('WebSocket is not connected');
     }
@@ -144,34 +157,63 @@ export class BaseWSClient {
 
   /**
    * Handle incoming raw message data.
-   * Parses JSON and handles ping/pong automatically.
+   * - Text frames: Check for control messages (ping), then decode with codec
+   * - Binary frames: Decode directly with codec
+   *
+   * Control messages (ping/pong/error) are always JSON text frames,
+   * regardless of what codec is used for data messages.
    */
-  private handleRawMessage(data: string): void {
-    let msg: unknown;
-    try {
-      msg = JSON.parse(data);
-    } catch {
-      // Not valid JSON, pass through as-is
-      this.onMessage(data);
+  private handleRawMessage(data: string | ArrayBuffer): void {
+    // Binary frame -> decode with codec directly
+    if (data instanceof ArrayBuffer) {
+      try {
+        const decoded = this._codec.decode(data);
+        this.onMessage(decoded);
+      } catch (err) {
+        this.onError(`Failed to decode binary message: ${err}`);
+      }
       return;
     }
 
-    // Check if it's a ping message
-    if (this.isPingMessage(msg)) {
-      const pingId = (msg as ControlMessage).pingId;
-      if (this.options.autoPong && pingId !== undefined) {
+    // Text frame -> check for control messages first
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      // Not valid JSON, try to decode with codec
+      try {
+        const decoded = this._codec.decode(data);
+        this.onMessage(decoded);
+      } catch (err) {
+        this.onError(`Failed to decode text message: ${err}`);
+      }
+      return;
+    }
+
+    // Check if it's a ping message (control message)
+    if (this.isPingMessage(parsed)) {
+      const pingId = (parsed as ControlMessage).pingId;
+      if (this._autoPong && pingId !== undefined) {
         this.sendPong(pingId);
       }
       this.onPing(pingId ?? 0);
       return;
     }
 
-    // Pass through all other messages
-    this.onMessage(msg);
+    // Not a control message -> decode with codec
+    // For JSON codec, the parsed object is already decoded
+    // For other codecs, we pass the raw string
+    try {
+      const decoded = this._codec.decode(data);
+      this.onMessage(decoded);
+    } catch (err) {
+      this.onError(`Failed to decode message: ${err}`);
+    }
   }
 
   /**
    * Check if a message is a ping message.
+   * Pings are always JSON with type: "ping".
    */
   private isPingMessage(msg: unknown): boolean {
     return (
@@ -184,8 +226,9 @@ export class BaseWSClient {
 
   /**
    * Send a pong response.
+   * Pongs are always JSON, bypassing the codec.
    */
   private sendPong(pingId: number): void {
-    this.send({ type: 'pong', pingId });
+    this.sendRaw(JSON.stringify({ type: 'pong', pingId }));
   }
 }

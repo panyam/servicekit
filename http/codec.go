@@ -22,6 +22,7 @@ const (
 
 // Codec handles encoding/decoding of messages over WebSocket.
 // The type parameters I and O represent input (received) and output (sent) message types.
+// Note: Pings are handled at the transport layer (BaseConn), not by codecs.
 type Codec[I any, O any] interface {
 	// Decode converts raw WebSocket data into a typed input message.
 	// msgType indicates whether the data was received as text or binary.
@@ -30,10 +31,6 @@ type Codec[I any, O any] interface {
 	// Encode converts a typed output message to raw bytes for sending.
 	// Returns the encoded bytes and the appropriate message type (text/binary).
 	Encode(msg O) ([]byte, MessageType, error)
-
-	// EncodePing creates a ping message for heartbeat/keepalive.
-	// The ping message should include the provided metadata for tracking.
-	EncodePing(pingId int64, connId string, name string) ([]byte, MessageType, error)
 }
 
 // ============================================================================
@@ -57,18 +54,6 @@ func (c *JSONCodec) Encode(msg any) ([]byte, MessageType, error) {
 	return data, TextMessage, err
 }
 
-// EncodePing creates a JSON ping message.
-func (c *JSONCodec) EncodePing(pingId int64, connId, name string) ([]byte, MessageType, error) {
-	ping := map[string]any{
-		"type":   "ping",
-		"pingId": pingId,
-		"connId": connId,
-		"name":   name,
-	}
-	data, err := json.Marshal(ping)
-	return data, TextMessage, err
-}
-
 // ============================================================================
 // TypedJSONCodec - Strongly-typed JSON messages
 // ============================================================================
@@ -88,19 +73,6 @@ func (c *TypedJSONCodec[I, O]) Decode(data []byte, msgType MessageType) (I, erro
 // Encode marshals a typed value to JSON bytes.
 func (c *TypedJSONCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
 	data, err := json.Marshal(msg)
-	return data, TextMessage, err
-}
-
-// EncodePing creates a JSON ping message.
-// For typed codecs, ping is still untyped JSON (it's a control message).
-func (c *TypedJSONCodec[I, O]) EncodePing(pingId int64, connId, name string) ([]byte, MessageType, error) {
-	ping := map[string]any{
-		"type":   "ping",
-		"pingId": pingId,
-		"connId": connId,
-		"name":   name,
-	}
-	data, err := json.Marshal(ping)
 	return data, TextMessage, err
 }
 
@@ -141,19 +113,6 @@ func (c *ProtoJSONCodec[I, O]) Decode(data []byte, msgType MessageType) (I, erro
 // Encode marshals a protobuf message to JSON bytes.
 func (c *ProtoJSONCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
 	data, err := c.MarshalOptions.Marshal(msg)
-	return data, TextMessage, err
-}
-
-// EncodePing creates a JSON ping message.
-// Pings are always JSON for consistency and debuggability.
-func (c *ProtoJSONCodec[I, O]) EncodePing(pingId int64, connId, name string) ([]byte, MessageType, error) {
-	ping := map[string]any{
-		"type":   "ping",
-		"pingId": pingId,
-		"connId": connId,
-		"name":   name,
-	}
-	data, err := json.Marshal(ping)
 	return data, TextMessage, err
 }
 
@@ -202,19 +161,6 @@ func (c *BinaryProtoCodec[I, O]) Decode(data []byte, msgType MessageType) (I, er
 func (c *BinaryProtoCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
 	data, err := proto.Marshal(msg)
 	return data, BinaryMessage, err
-}
-
-// EncodePing creates a JSON ping message.
-// Even for binary codecs, pings are sent as text for debugging visibility.
-func (c *BinaryProtoCodec[I, O]) EncodePing(pingId int64, connId, name string) ([]byte, MessageType, error) {
-	ping := map[string]any{
-		"type":   "ping",
-		"pingId": pingId,
-		"connId": connId,
-		"name":   name,
-	}
-	data, err := json.Marshal(ping)
-	return data, TextMessage, err
 }
 
 // newInput creates a new instance of the input type.

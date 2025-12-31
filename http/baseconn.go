@@ -11,6 +11,27 @@ import (
 	gut "github.com/panyam/goutils/utils"
 )
 
+// OutgoingMessage represents any message that can be sent over the WebSocket.
+// This union type allows pings, errors, and data messages to all go through
+// the same Writer, avoiding concurrent write issues.
+type OutgoingMessage[O any] struct {
+	// Data is a regular output message (mutually exclusive with Ping/Error)
+	Data *O
+
+	// Ping is a heartbeat message (mutually exclusive with Data/Error)
+	Ping *PingData
+
+	// Error is an error message (mutually exclusive with Data/Ping)
+	Error error
+}
+
+// PingData contains ping message metadata.
+type PingData struct {
+	PingId int64
+	ConnId string
+	Name   string
+}
+
 // BaseConn is a generic WebSocket connection that separates transport from encoding.
 // It uses a Codec to handle message serialization/deserialization.
 //
@@ -34,8 +55,9 @@ type BaseConn[I any, O any] struct {
 	Codec Codec[I, O]
 
 	// Writer is the output channel for sending messages.
+	// Handles all outgoing messages: data, pings, and errors.
 	// Initialized in OnStart.
-	Writer *conc.Writer[conc.Message[O]]
+	Writer *conc.Writer[OutgoingMessage[O]]
 
 	// NameStr is an optional human-readable name for this connection.
 	NameStr string
@@ -98,15 +120,20 @@ func (b *BaseConn[I, O]) OnStart(conn *websocket.Conn) error {
 	log.Printf("Starting %s connection: %s", b.Name(), b.ConnId())
 
 	b.wsConn = conn
-	b.Writer = conc.NewWriter(func(msg conc.Message[O]) error {
-		if msg.Error == io.EOF {
-			log.Println("Stream closed...", msg.Error)
-			return nil
+	b.Writer = conc.NewWriter(func(msg OutgoingMessage[O]) error {
+		// Handle the different message types
+		if msg.Ping != nil {
+			return b.writePing(conn, msg.Ping)
 		} else if msg.Error != nil {
+			if msg.Error == io.EOF {
+				log.Println("Stream closed...", msg.Error)
+				return nil
+			}
 			return b.writeError(conn, msg.Error)
-		} else {
-			return b.writeMessage(conn, msg.Value)
+		} else if msg.Data != nil {
+			return b.writeMessage(conn, *msg.Data)
 		}
+		return nil
 	})
 
 	return nil
@@ -132,14 +159,33 @@ func (b *BaseConn[I, O]) writeError(conn *websocket.Conn, err error) error {
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
-// SendPing sends a ping message using the codec.
+// writePing sends a ping message.
+// Pings are always sent as JSON text for readability and debugging.
+func (b *BaseConn[I, O]) writePing(conn *websocket.Conn, ping *PingData) error {
+	pingMsg := map[string]any{
+		"type":   "ping",
+		"pingId": ping.PingId,
+		"connId": ping.ConnId,
+		"name":   ping.Name,
+	}
+	data, _ := json.Marshal(pingMsg)
+	return conn.WriteMessage(websocket.TextMessage, data)
+}
+
+// SendPing sends a ping message through the Writer.
+// This ensures thread-safe writes by going through the serialized Writer.
 func (b *BaseConn[I, O]) SendPing() error {
 	b.PingId++
-	data, msgType, err := b.Codec.EncodePing(b.PingId, b.ConnId(), b.Name())
-	if err != nil {
-		return err
+	if b.Writer != nil {
+		b.Writer.Send(OutgoingMessage[O]{
+			Ping: &PingData{
+				PingId: b.PingId,
+				ConnId: b.ConnId(),
+				Name:   b.Name(),
+			},
+		})
 	}
-	return b.wsConn.WriteMessage(int(msgType), data)
+	return nil
 }
 
 // HandleMessage processes an incoming message.
@@ -173,19 +219,19 @@ func (b *BaseConn[I, O]) OnTimeout() bool {
 // This is a convenience method that wraps the Writer.Send call.
 func (b *BaseConn[I, O]) SendOutput(msg O) {
 	if b.Writer != nil {
-		b.Writer.Send(conc.Message[O]{Value: msg})
+		b.Writer.Send(OutgoingMessage[O]{Data: &msg})
 	}
 }
 
 // SendError sends an error to the client.
 func (b *BaseConn[I, O]) SendError(err error) {
 	if b.Writer != nil {
-		b.Writer.Send(conc.Message[O]{Error: err})
+		b.Writer.Send(OutgoingMessage[O]{Error: err})
 	}
 }
 
 // InputChan returns the Writer's input channel for use with FanOut.
-func (b *BaseConn[I, O]) InputChan() chan<- conc.Message[O] {
+func (b *BaseConn[I, O]) InputChan() chan<- OutgoingMessage[O] {
 	if b.Writer != nil {
 		return b.Writer.InputChan()
 	}

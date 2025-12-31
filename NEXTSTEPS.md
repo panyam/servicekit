@@ -5,7 +5,11 @@
 - [x] Update code comments and godoc for all new files
 - [x] Create TypeScript client library (`@panyam/servicekit-client`)
 - [x] Update grpcws-demo to use the new client library
-- [ ] Manual browser testing of grpcws-demo
+- [x] Fix concurrent write panic (OutgoingMessage union type)
+- [x] Separate transport layer from codec layer (pings always JSON)
+- [x] Add client-side codec support (JSONCodec, BinaryCodec)
+- [x] Create multiplayer demo with gameId-based rooms
+- [x] Manual browser testing of grpcws-demo multiplayer
 - [ ] Publish TypeScript client to npm
 
 ## Future Enhancements

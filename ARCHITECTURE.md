@@ -58,15 +58,30 @@ servicekit/
 
 ## Key Components
 
+### Transport/Codec Separation
+
+The architecture cleanly separates **transport concerns** from **encoding concerns**:
+
+**Transport Layer** (BaseConn, grpcws):
+- WebSocket connection management
+- Ping/pong heartbeats (always JSON)
+- Error messages (always JSON)
+- Thread-safe writes via OutgoingMessage union type
+
+**Codec Layer** (Codec interface):
+- Data message encoding/decoding only
+- No knowledge of control messages
+
+This separation ensures control messages work consistently even with binary protocols.
+
 ### Codec System
 
-The `Codec[I, O]` interface decouples message encoding from transport:
+The `Codec[I, O]` interface handles **data messages only**:
 
 ```go
 type Codec[I any, O any] interface {
     Decode(data []byte, msgType MessageType) (I, error)
     Encode(msg O) ([]byte, MessageType, error)
-    EncodePing(pingId int64, connId, name string) ([]byte, MessageType, error)
 }
 ```
 
@@ -82,19 +97,31 @@ type Codec[I any, O any] interface {
 
 Generic connection type that handles:
 - WebSocket read/write with codec
-- Concurrent message writing via `conc.Writer`
-- Ping-pong heartbeat mechanism
+- Thread-safe writes via `OutgoingMessage[O]` union type
+- Ping-pong heartbeat mechanism (transport-level, always JSON)
 - Connection identification (`Name()`, `ConnId()`)
 
 ```go
 type BaseConn[I any, O any] struct {
     Codec     Codec[I, O]
-    Writer    *conc.Writer[conc.Message[O]]
+    Writer    *conc.Writer[OutgoingMessage[O]]
     NameStr   string
     ConnIdStr string
     PingId    int64
 }
+
+// OutgoingMessage is a union type for all outgoing messages
+type OutgoingMessage[O any] struct {
+    Data  *O        // Data message (uses codec)
+    Ping  *PingData // Ping message (always JSON)
+    Error error     // Error message (always JSON)
+}
 ```
+
+All writes go through the Writer with this union type, ensuring:
+- Thread-safe concurrent writes
+- Consistent handling of all message types
+- No direct WebSocket writes that could cause race conditions
 
 ### gRPC-WebSocket Bridge
 

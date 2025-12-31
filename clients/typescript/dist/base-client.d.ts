@@ -6,7 +6,7 @@
  *
  * Use this directly for http/JSONConn servers, or as the base for GRPCWSClient.
  */
-import { ClientOptions, MessageHandler, ErrorHandler, VoidHandler } from './types';
+import { ClientOptions, Codec, MessageHandler, ErrorHandler, VoidHandler } from './types';
 /**
  * Base WebSocket client with automatic ping/pong heartbeat handling.
  *
@@ -25,18 +25,22 @@ import { ClientOptions, MessageHandler, ErrorHandler, VoidHandler } from './type
  * client.send({ hello: 'world' });
  * ```
  */
-export declare class BaseWSClient {
+export declare class BaseWSClient<I = unknown, O = unknown> {
     private ws;
-    private options;
-    /** Called when a message is received (excluding ping messages) */
-    onMessage: MessageHandler;
+    private _codec;
+    private _autoPong;
+    private _WebSocket;
+    /** Called when a data message is received (decoded by codec) */
+    onMessage: MessageHandler<I>;
     /** Called when a ping is received (after auto-pong if enabled) */
     onPing: (pingId: number) => void;
     /** Called when the connection closes */
     onClose: VoidHandler;
     /** Called when a WebSocket error occurs */
     onError: ErrorHandler;
-    constructor(options?: ClientOptions);
+    constructor(options?: ClientOptions<I, O>);
+    /** Get the codec used for encoding/decoding data messages */
+    get codec(): Codec<I, O>;
     /**
      * Connect to a WebSocket server.
      * @param url The WebSocket URL to connect to
@@ -44,15 +48,16 @@ export declare class BaseWSClient {
      */
     connect(url: string): Promise<void>;
     /**
-     * Send a raw JSON message to the server.
-     * @param data The data to send (will be JSON.stringify'd)
+     * Send a data message to the server using the configured codec.
+     * @param data The data to send (will be encoded by codec)
      */
-    send(data: unknown): void;
+    send(data: O): void;
     /**
-     * Send a raw string message to the server (no JSON encoding).
-     * @param message The raw string to send
+     * Send a raw message to the server (bypasses codec).
+     * Useful for control messages like pong.
+     * @param message The raw string or ArrayBuffer to send
      */
-    sendRaw(message: string): void;
+    sendRaw(message: string | ArrayBuffer): void;
     /**
      * Close the WebSocket connection.
      */
@@ -67,15 +72,21 @@ export declare class BaseWSClient {
     get readyState(): number;
     /**
      * Handle incoming raw message data.
-     * Parses JSON and handles ping/pong automatically.
+     * - Text frames: Check for control messages (ping), then decode with codec
+     * - Binary frames: Decode directly with codec
+     *
+     * Control messages (ping/pong/error) are always JSON text frames,
+     * regardless of what codec is used for data messages.
      */
     private handleRawMessage;
     /**
      * Check if a message is a ping message.
+     * Pings are always JSON with type: "ping".
      */
     private isPingMessage;
     /**
      * Send a pong response.
+     * Pongs are always JSON, bypassing the codec.
      */
     private sendPong;
 }
