@@ -26,7 +26,13 @@ func NewTimeHandler() *TimeHandler {
 // This examples allows all upgrades and is only needed to specify the kind of
 // connection type to use - in this case TimeConn.
 func (t *TimeHandler) Validate(w http.ResponseWriter, r *http.Request) (out *TimeConn, isValid bool) {
-	return &TimeConn{handler: t}, true
+	return &TimeConn{
+		JSONConn: gohttp.JSONConn{
+			Codec:   &gohttp.JSONCodec{},
+			NameStr: "TimeConn",
+		},
+		handler: t,
+	}, true
 }
 
 // Our TimeConn allows us to override any connection instance specific behaviours
@@ -37,20 +43,17 @@ type TimeConn struct {
 
 func (t *TimeConn) OnStart(conn *websocket.Conn) error {
 	t.JSONConn.OnStart(conn)
-	writer := t.JSONConn.Writer
 
 	log.Println("Got a new connection.....")
 	// Register the writer channel into the Fanout
-	t.handler.Fanout.Add(writer.SendChan(), nil, false)
+	t.handler.Fanout.Add(t.Writer.InputChan(), nil, false)
 	return nil
 }
 
 func (t *TimeConn) OnClose() {
-	writer := t.JSONConn.Writer
-
 	// Removal can be synchronous or asynchronous - we want to ensure it is done
 	// synchronously so another publish (if one came in) wont be attempted on a closed channel
-	<-t.handler.Fanout.Remove(writer.SendChan(), true)
+	<-t.handler.Fanout.Remove(t.Writer.InputChan(), true)
 	t.JSONConn.OnClose()
 }
 

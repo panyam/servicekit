@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	conc "github.com/panyam/gocurrent"
-	gut "github.com/panyam/goutils/utils"
 )
 
 // Represents a bidirectional websocket connection
@@ -153,123 +152,26 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 	}
 }
 
-// An implementation of the WSConn interface that exchanges JSON message paylods
-type JSONConn struct {
-	// The output writer as a channel to send outgoing messages on
-	Writer *conc.Writer[conc.Message[any]]
+// JSONConn is an alias for BaseConn with untyped JSON messages.
+// This provides a simple way to handle dynamic JSON messages.
+//
+// For typed messages, use BaseConn[YourInputType, YourOutputType] directly
+// with an appropriate codec.
+type JSONConn = BaseConn[any, any]
 
-	// Name of this connection (for clarity)
-	NameStr string
-
-	// A connection ID to identify this connection
-	ConnIdStr string
-
-	// Keeps track of the current Ping count to send with the ping
-	PingId int64
-}
-
-// Gets the name of this connection
-func (j *JSONConn) Name() string {
-	if j.NameStr == "" {
-		j.NameStr = "JSONConn"
-	}
-	return j.NameStr
-}
-
-// Basic debug information.
-func (j *JSONConn) DebugInfo() any {
-	return map[string]any{
-		"writer": j.Writer.DebugInfo(),
-		"Name":   j.NameStr,
-		"ConnId": j.ConnIdStr,
-		"PingId": j.PingId,
+// NewJSONConn creates a new JSONConn with the default JSON codec.
+func NewJSONConn() *JSONConn {
+	return &JSONConn{
+		Codec:   &JSONCodec{},
+		NameStr: "JSONConn",
 	}
 }
 
-// Returns the (possibly auto-generated) Connection Id
-func (j *JSONConn) ConnId() string {
-	if j.ConnIdStr == "" {
-		j.ConnIdStr = gut.RandString(10, "")
-	}
-	return j.ConnIdStr
-}
+// JSONHandler is a simple handler that creates JSONConn instances.
+// All connections are accepted (no validation).
+type JSONHandler struct{}
 
-// Reads the next message from the websocket connection as a JSON payload
-func (j *JSONConn) ReadMessage(conn *websocket.Conn) (out any, err error) {
-	err = conn.ReadJSON(&out)
-	return
+// Validate implements WSHandler. Accepts all connections.
+func (j *JSONHandler) Validate(w http.ResponseWriter, r *http.Request) (*JSONConn, bool) {
+	return NewJSONConn(), true
 }
-
-// This (callback) method is called when the websocket connection is upgraded but before
-// the websocket event loop begins (in the WSHandleConn method)
-func (j *JSONConn) OnStart(conn *websocket.Conn) error {
-	log.Printf("Starting %s connection: %s", j.Name(), j.ConnId()) // E: e.connId undefined (type *HubConn has n…
-	j.Writer = conc.NewWriter(
-		func(msg conc.Message[any]) error {
-			if msg.Error == io.EOF {
-				log.Println("Streamer closed...", msg.Error)
-				// do nothing
-				// SendJsonResponse(rw, nil, msg.Error)
-				return nil
-			} else if msg.Error != nil {
-				return WSConnWriteError(conn, msg.Error)
-			} else {
-				return WSConnWriteMessage(conn, msg.Value)
-			}
-		})
-	return nil
-}
-
-// Called to send the next ping message.
-func (j *JSONConn) SendPing() error {
-	j.PingId += 1
-	j.Writer.Send(conc.Message[any]{Value: gut.StrMap{
-		"type":   "ping",
-		"pingId": j.PingId,
-		"name":   j.Name(),
-		"connId": j.ConnId(),
-	}})
-	return nil
-}
-
-// Called to handle the next message from the input stream on the ws conn.
-func (j *JSONConn) HandleMessage(msg any) error {
-	log.Println("Received Message: ", msg)
-	return nil
-}
-
-func (j *JSONConn) OnError(err error) error {
-	return err
-}
-
-// Called when the connection closes.
-func (j *JSONConn) OnClose() {
-	// All the core hapens here
-	if j.Writer != nil {
-		j.Writer.Stop()
-	}
-	log.Printf("Closed %s connection: %s", j.Name(), j.ConnId()) // E: e.connId undefined (type *HubConn has n…
-}
-
-// Handle read timeouts.  By default returns true to disconnect and close on a timeout.
-func (j *JSONConn) OnTimeout() bool {
-	return true
-}
-
-type JSONHandler struct {
-}
-
-func (j *JSONHandler) Validate(w http.ResponseWriter, r *http.Request) (out WSConn[any], isValid bool) {
-	// All connections upgradeable
-	return &JSONConn{}, true
-}
-
-/*
-type DefaultWSHandler[I any] struct {
-}
-
-// Called to validate an http request to see if it is upgradeable to a ws conn
-func (d *DefaultWSHandler[I]) Validate(w http.ResponseWriter, r *http.Request) (WSConn[I], bool) {
-	return nil, true
-}
-*/

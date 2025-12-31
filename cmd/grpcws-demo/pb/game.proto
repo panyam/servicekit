@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package game.v1;
+
+option go_package = "github.com/panyam/servicekit/cmd/grpcws-demo/gen;gen";
+
+// GameService demonstrates all gRPC streaming patterns
+service GameService {
+  // Server streaming: Subscribe to game state updates
+  rpc Subscribe(SubscribeRequest) returns (stream GameEvent);
+
+  // Client streaming: Send multiple commands, get summary response
+  rpc SendCommands(stream GameCommand) returns (CommandSummary);
+
+  // Bidirectional streaming: Real-time game sync
+  rpc SyncGame(stream PlayerAction) returns (stream GameState);
+}
+
+// ============================================================================
+// Server Streaming Messages
+// ============================================================================
+
+message SubscribeRequest {
+  string game_id = 1;
+  string player_id = 2;
+  repeated string event_types = 3; // Filter by event types
+}
+
+message GameEvent {
+  string event_id = 1;
+  string event_type = 2;
+  int64 timestamp = 3;
+  string game_id = 4;
+  oneof payload {
+    PlayerJoined player_joined = 10;
+    PlayerLeft player_left = 11;
+    ScoreUpdate score_update = 12;
+    ChatMessage chat_message = 13;
+  }
+}
+
+message PlayerJoined {
+  string player_id = 1;
+  string player_name = 2;
+}
+
+message PlayerLeft {
+  string player_id = 1;
+  string reason = 2;
+}
+
+message ScoreUpdate {
+  string player_id = 1;
+  int32 old_score = 2;
+  int32 new_score = 3;
+}
+
+message ChatMessage {
+  string player_id = 1;
+  string message = 2;
+}
+
+// ============================================================================
+// Client Streaming Messages
+// ============================================================================
+
+message GameCommand {
+  string command_id = 1;
+  string command_type = 2;
+  int64 timestamp = 3;
+  map<string, string> parameters = 4;
+}
+
+message CommandSummary {
+  int32 commands_received = 1;
+  int32 commands_executed = 2;
+  int32 commands_failed = 3;
+  repeated string errors = 4;
+}
+
+// ============================================================================
+// Bidirectional Streaming Messages
+// ============================================================================
+
+message PlayerAction {
+  string action_id = 1;
+  string player_id = 2;
+  int64 timestamp = 3;
+  oneof action {
+    MoveAction move = 10;
+    AttackAction attack = 11;
+    UseItemAction use_item = 12;
+  }
+}
+
+message MoveAction {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message AttackAction {
+  string target_id = 1;
+  string weapon_id = 2;
+}
+
+message UseItemAction {
+  string item_id = 1;
+  string target_id = 2;
+}
+
+message GameState {
+  string state_id = 1;
+  int64 timestamp = 2;
+  repeated PlayerState players = 3;
+  repeated EntityState entities = 4;
+}
+
+message PlayerState {
+  string player_id = 1;
+  float x = 2;
+  float y = 3;
+  float z = 4;
+  int32 health = 5;
+  int32 score = 6;
+}
+
+message EntityState {
+  string entity_id = 1;
+  string entity_type = 2;
+  float x = 3;
+  float y = 4;
+  float z = 5;
+}

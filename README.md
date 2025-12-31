@@ -13,7 +13,9 @@ The servicekit WebSocket package provides a robust, production-ready framework f
 - **Thread-safe message broadcasting** to multiple clients
 - **Automatic ping-pong mechanism** to prevent connection timeouts
 - **Type-safe message handling** with generics
-- **Built-in JSON message support** with the JSONConn implementation
+- **Pluggable Codec system** for flexible message encoding (JSON, Protobuf, custom)
+- **Generic BaseConn[I, O]** for type-safe input/output message handling
+- **gRPC-over-WebSocket support** via the `grpcws` package for all streaming modes
 - **Configurable timeouts and intervals** for different deployment scenarios
 
 ## Architecture
@@ -55,6 +57,47 @@ type BiDirStreamConn[I any] interface {
 }
 ```
 
+### Codec System
+
+The Codec interface decouples message encoding from transport, allowing you to use different serialization formats:
+
+```go
+type Codec[I any, O any] interface {
+    Decode(data []byte, msgType MessageType) (I, error)
+    Encode(msg O) ([]byte, MessageType, error)
+    EncodePing(pingId int64, connId string, name string) ([]byte, MessageType, error)
+}
+```
+
+#### Built-in Codecs
+
+| Codec | Input/Output Types | Wire Format | Use Case |
+|-------|-------------------|-------------|----------|
+| `JSONCodec` | `any` | JSON text | Dynamic messages, debugging |
+| `TypedJSONCodec[I, O]` | `I`, `O` | JSON text | Typed Go structs |
+| `ProtoJSONCodec[I, O]` | `proto.Message` | JSON text | Proto messages, human-readable |
+| `BinaryProtoCodec[I, O]` | `proto.Message` | Binary | Proto messages, max efficiency |
+
+### BaseConn[I, O]
+
+The generic `BaseConn[I, O]` is the foundation for all WebSocket connections:
+
+```go
+type BaseConn[I any, O any] struct {
+    Codec     Codec[I, O]
+    Writer    *conc.Writer[conc.Message[O]]
+    NameStr   string
+    ConnIdStr string
+    PingId    int64
+}
+```
+
+For simple JSON use cases, `JSONConn` is an alias for `BaseConn[any, any]`:
+
+```go
+type JSONConn = BaseConn[any, any]
+```
+
 ## Basic Usage
 
 ### 1. Simple Echo Server
@@ -85,7 +128,12 @@ type EchoHandler struct{}
 
 func (h *EchoHandler) Validate(w http.ResponseWriter, r *http.Request) (*EchoConn, bool) {
     // Accept all connections - add authentication here in production
-    return &EchoConn{}, true
+    return &EchoConn{
+        JSONConn: gohttp.JSONConn{
+            Codec:   &gohttp.JSONCodec{},
+            NameStr: "EchoConn",
+        },
+    }, true
 }
 
 func main() {
@@ -654,6 +702,99 @@ func (cm *ConnectionManager) GetStats() map[string]any {
         "max_connections":   cm.maxConns,
     }
 }
+```
+
+## gRPC-over-WebSocket (`grpcws` Package)
+
+The `grpcws` package provides WebSocket transport for gRPC streaming RPCs, supporting all three streaming patterns with full lifecycle management.
+
+### Streaming Patterns
+
+| Pattern | gRPC Definition | Use Case |
+|---------|-----------------|----------|
+| Server Streaming | `rpc Subscribe(Req) returns (stream Resp)` | Real-time updates, notifications |
+| Client Streaming | `rpc SendBatch(stream Req) returns (Resp)` | Bulk uploads, aggregations |
+| Bidirectional | `rpc Chat(stream Req) returns (stream Resp)` | Real-time collaboration, gaming |
+
+### Server Streaming Example
+
+```go
+import (
+    "github.com/panyam/servicekit/grpcws"
+    gohttp "github.com/panyam/servicekit/http"
+)
+
+// Server streaming: Subscribe to game events
+router.HandleFunc("/ws/v1/subscribe", gohttp.WSServe(
+    grpcws.NewServerStreamHandler(
+        func(ctx context.Context, req *pb.SubscribeRequest) (pb.GameService_SubscribeClient, error) {
+            return grpcClient.Subscribe(ctx, req)
+        },
+        func(r *http.Request) (*pb.SubscribeRequest, error) {
+            return &pb.SubscribeRequest{
+                GameId: mux.Vars(r)["game_id"],
+            }, nil
+        },
+    ),
+    nil,
+))
+```
+
+### Client Streaming Example
+
+```go
+// Client streaming: Send multiple commands, get summary
+router.HandleFunc("/ws/v1/commands", gohttp.WSServe(
+    grpcws.NewClientStreamHandler(
+        func(ctx context.Context) (pb.GameService_SendCommandsClient, error) {
+            return grpcClient.SendCommands(ctx)
+        },
+        func() *pb.GameCommand { return &pb.GameCommand{} },
+    ),
+    nil,
+))
+```
+
+### Bidirectional Streaming Example
+
+```go
+// Bidirectional streaming: Real-time game sync
+router.HandleFunc("/ws/v1/sync", gohttp.WSServe(
+    grpcws.NewBidiStreamHandler(
+        func(ctx context.Context) (pb.GameService_SyncGameClient, error) {
+            return grpcClient.SyncGame(ctx)
+        },
+        func() *pb.PlayerAction { return &pb.PlayerAction{} },
+    ),
+    nil,
+))
+```
+
+### Message Protocol
+
+All gRPC-WS messages use a JSON envelope:
+
+```json
+// Server → Client
+{"type": "data", "data": <proto-as-json>}
+{"type": "error", "error": "message"}
+{"type": "stream_end"}
+{"type": "ping", "pingId": 123}
+
+// Client → Server
+{"type": "data", "data": <proto-as-json>}
+{"type": "pong", "pingId": 123}
+{"type": "cancel"}
+{"type": "end_send"}  // Half-close for client/bidi streaming
+```
+
+### Running the Demo
+
+```bash
+# Run the grpcws demo server
+go run ./cmd/grpcws-demo
+
+# Open http://localhost:8080 in browser to test all streaming patterns
 ```
 
 ## Testing

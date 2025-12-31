@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>gRPC-WebSocket Demo</title>
+    <style>
+        body { font-family: system-ui, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background: #f5f5f5; }
+        h1 { color: #333; }
+        .section { background: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .section h3 { margin-top: 0; color: #2196F3; }
+        .section p { color: #666; margin-bottom: 15px; }
+        button { padding: 8px 16px; margin: 5px 5px 5px 0; cursor: pointer; border: none; border-radius: 4px; font-size: 14px; }
+        .connect { background: #4CAF50; color: white; }
+        .connect:hover { background: #45a049; }
+        .disconnect { background: #f44336; color: white; }
+        .disconnect:hover { background: #da190b; }
+        .send { background: #2196F3; color: white; }
+        .send:hover { background: #1976D2; }
+        input { padding: 8px 12px; margin: 5px 5px 5px 0; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .log { background: #1e1e1e; color: #d4d4d4; padding: 12px; height: 200px; overflow-y: auto;
+               font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; border-radius: 4px; margin-top: 10px; }
+        .log .error { color: #f44336; }
+        .log .info { color: #4CAF50; }
+        .log .data { color: #64B5F6; }
+        .log .ping { color: #9E9E9E; }
+        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .status.connected { background: #4CAF50; }
+        .status.disconnected { background: #f44336; }
+        code { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <h1>gRPC-WebSocket Demo</h1>
+    <p>This demo shows the <code>grpcws</code> package for gRPC streaming over WebSocket using real protobuf messages.</p>
+
+    <div class="section">
+        <h3><span class="status disconnected" id="subscribe-status"></span>Server Streaming: Subscribe to Game Events</h3>
+        <p>Pattern: <code>rpc Subscribe(SubscribeRequest) returns (stream GameEvent)</code><br>
+           Server pushes game events (score updates) every 2 seconds. Client only receives.</p>
+        <input type="text" id="subscribe-game-id" value="game123" placeholder="Game ID" style="width: 100px;">
+        <input type="text" id="subscribe-player-id" value="player1" placeholder="Player ID" style="width: 100px;">
+        <button class="connect" onclick="connectSubscribe()">Connect</button>
+        <button class="disconnect" onclick="disconnectSubscribe()">Disconnect</button>
+        <div id="subscribe-log" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h3><span class="status disconnected" id="commands-status"></span>Client Streaming: Send Commands</h3>
+        <p>Pattern: <code>rpc SendCommands(stream GameCommand) returns (CommandSummary)</code><br>
+           Client sends multiple commands. When done, server returns a summary of executed commands.</p>
+        <input type="text" id="command-type" value="attack" placeholder="Command type" style="width: 100px;">
+        <button class="connect" onclick="connectCommands()">Connect</button>
+        <button class="send" onclick="sendCommand()">Send Command</button>
+        <button class="send" onclick="endCommands()">End Stream</button>
+        <button class="disconnect" onclick="disconnectCommands()">Disconnect</button>
+        <div id="commands-log" class="log"></div>
+    </div>
+
+    <div class="section">
+        <h3><span class="status disconnected" id="sync-status"></span>Bidirectional Streaming: Game Sync</h3>
+        <p>Pattern: <code>rpc SyncGame(stream PlayerAction) returns (stream GameState)</code><br>
+           Full duplex: client sends player actions, server responds with updated game state.</p>
+        <input type="text" id="sync-player-id" value="player1" placeholder="Player ID" style="width: 100px;">
+        <button class="connect" onclick="connectSync()">Connect</button>
+        <button class="send" onclick="sendMove()">Move</button>
+        <button class="send" onclick="sendAttack()">Attack</button>
+        <button class="send" onclick="sendUseItem()">Use Item</button>
+        <button class="disconnect" onclick="disconnectSync()">Disconnect</button>
+        <div id="sync-log" class="log"></div>
+    </div>
+
+    <script>
+        let subscribeWs = null, commandsWs = null, syncWs = null;
+        let commandNum = 0, actionNum = 0;
+
+        function setStatus(id, connected) {
+            document.getElementById(id).className = 'status ' + (connected ? 'connected' : 'disconnected');
+        }
+
+        function log(elementId, msg, type = '') {
+            const el = document.getElementById(elementId);
+            const line = document.createElement('div');
+            line.className = type;
+            line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+            el.appendChild(line);
+            el.scrollTop = el.scrollHeight;
+            while (el.children.length > 100) el.removeChild(el.firstChild);
+        }
+
+        function handleMessage(logId, e, ws) {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'ping') {
+                ws.send(JSON.stringify({type: 'pong', pingId: msg.pingId}));
+                log(logId, 'Ping ' + msg.pingId, 'ping');
+            } else if (msg.type === 'data') {
+                log(logId, 'Data: ' + JSON.stringify(msg.data), 'data');
+            } else if (msg.type === 'stream_end') {
+                log(logId, 'Stream ended', 'info');
+            } else if (msg.type === 'error') {
+                log(logId, 'Error: ' + msg.error, 'error');
+            } else {
+                log(logId, 'Unknown: ' + JSON.stringify(msg));
+            }
+        }
+
+        // Subscribe (Server Streaming)
+        function connectSubscribe() {
+            if (subscribeWs) subscribeWs.close();
+            const gameId = document.getElementById('subscribe-game-id').value || 'game123';
+            const playerId = document.getElementById('subscribe-player-id').value || 'player1';
+
+            subscribeWs = new WebSocket('ws://' + location.host + '/ws/v1/subscribe');
+            subscribeWs.onopen = () => {
+                log('subscribe-log', 'Connected', 'info');
+                setStatus('subscribe-status', true);
+                // Send initial request
+                subscribeWs.send(JSON.stringify({
+                    type: 'data',
+                    data: { gameId: gameId, playerId: playerId }
+                }));
+                log('subscribe-log', 'Subscribed to game: ' + gameId, 'info');
+            };
+            subscribeWs.onclose = () => { log('subscribe-log', 'Disconnected', 'error'); setStatus('subscribe-status', false); };
+            subscribeWs.onmessage = (e) => handleMessage('subscribe-log', e, subscribeWs);
+        }
+        function disconnectSubscribe() { if (subscribeWs) { subscribeWs.close(); subscribeWs = null; } }
+
+        // Commands (Client Streaming)
+        function connectCommands() {
+            if (commandsWs) commandsWs.close();
+            commandNum = 0;
+            commandsWs = new WebSocket('ws://' + location.host + '/ws/v1/commands');
+            commandsWs.onopen = () => { log('commands-log', 'Connected - send commands then click "End Stream"', 'info'); setStatus('commands-status', true); };
+            commandsWs.onclose = () => { log('commands-log', 'Disconnected', 'error'); setStatus('commands-status', false); };
+            commandsWs.onmessage = (e) => handleMessage('commands-log', e, commandsWs);
+        }
+        function sendCommand() {
+            if (!commandsWs || commandsWs.readyState !== 1) { log('commands-log', 'Not connected', 'error'); return; }
+            commandNum++;
+            const cmdType = document.getElementById('command-type').value || 'attack';
+            const cmd = {
+                type: 'data',
+                data: {
+                    commandId: 'cmd-' + commandNum,
+                    commandType: cmdType,
+                    timestamp: Date.now(),
+                    parameters: { target: 'enemy-' + (commandNum % 5) }
+                }
+            };
+            commandsWs.send(JSON.stringify(cmd));
+            log('commands-log', 'Sent command: ' + cmdType + ' (cmd-' + commandNum + ')', 'info');
+        }
+        function endCommands() {
+            if (!commandsWs || commandsWs.readyState !== 1) { log('commands-log', 'Not connected', 'error'); return; }
+            commandsWs.send(JSON.stringify({type: 'end_send'}));
+            log('commands-log', 'Requested summary...', 'info');
+        }
+        function disconnectCommands() { if (commandsWs) { commandsWs.close(); commandsWs = null; } }
+
+        // Sync (Bidirectional Streaming)
+        function connectSync() {
+            if (syncWs) syncWs.close();
+            actionNum = 0;
+            syncWs = new WebSocket('ws://' + location.host + '/ws/v1/sync');
+            syncWs.onopen = () => { log('sync-log', 'Connected - send actions to see game state updates', 'info'); setStatus('sync-status', true); };
+            syncWs.onclose = () => { log('sync-log', 'Disconnected', 'error'); setStatus('sync-status', false); };
+            syncWs.onmessage = (e) => handleMessage('sync-log', e, syncWs);
+        }
+        function sendAction(action) {
+            if (!syncWs || syncWs.readyState !== 1) { log('sync-log', 'Not connected', 'error'); return; }
+            actionNum++;
+            const playerId = document.getElementById('sync-player-id').value || 'player1';
+            const msg = {
+                type: 'data',
+                data: {
+                    actionId: 'action-' + actionNum,
+                    playerId: playerId,
+                    timestamp: Date.now(),
+                    ...action
+                }
+            };
+            syncWs.send(JSON.stringify(msg));
+        }
+        function sendMove() {
+            sendAction({ move: { x: Math.random() * 100, y: 0, z: Math.random() * 100 } });
+            log('sync-log', 'Sent: Move', 'info');
+        }
+        function sendAttack() {
+            sendAction({ attack: { targetId: 'enemy-1', weaponId: 'sword' } });
+            log('sync-log', 'Sent: Attack', 'info');
+        }
+        function sendUseItem() {
+            sendAction({ useItem: { itemId: 'potion-1', targetId: 'self' } });
+            log('sync-log', 'Sent: Use Item', 'info');
+        }
+        function disconnectSync() { if (syncWs) { syncWs.close(); syncWs = null; } }
+    </script>
+</body>
+</html>

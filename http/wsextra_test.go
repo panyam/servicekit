@@ -51,7 +51,12 @@ func (e *EchoConn) HandleMessage(msg any) error {
 type EchoHandler struct{}
 
 func (h *EchoHandler) Validate(w http.ResponseWriter, r *http.Request) (*EchoConn, bool) {
-	return &EchoConn{}, true
+	return &EchoConn{
+		JSONConn: JSONConn{
+			Codec:   &JSONCodec{},
+			NameStr: "EchoConn",
+		},
+	}, true
 }
 
 // Chat server implementation for advanced testing
@@ -303,6 +308,10 @@ func (h *ChatHandler) Validate(w http.ResponseWriter, r *http.Request) (*ChatCon
 	}
 
 	return &ChatConn{
+		JSONConn: JSONConn{
+			Codec:   &JSONCodec{},
+			NameStr: "ChatConn",
+		},
 		server:   h.server,
 		username: username,
 	}, true
@@ -393,6 +402,10 @@ func (h *AuthHandler) Validate(w http.ResponseWriter, r *http.Request) (*AuthCon
 	}
 
 	return &AuthConn{
+		JSONConn: JSONConn{
+			Codec:   &JSONCodec{},
+			NameStr: "AuthConn",
+		},
 		userID: userID,
 		roles:  roles,
 	}, true
@@ -437,7 +450,12 @@ func (l *LoadTestConn) HandleMessage(msg any) error {
 type LoadTestHandler struct{}
 
 func (h *LoadTestHandler) Validate(w http.ResponseWriter, r *http.Request) (*LoadTestConn, bool) {
-	return &LoadTestConn{}, true
+	return &LoadTestConn{
+		JSONConn: JSONConn{
+			Codec:   &JSONCodec{},
+			NameStr: "LoadTestConn",
+		},
+	}, true
 }
 
 // Helper function to create a test WebSocket client

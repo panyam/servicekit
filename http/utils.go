@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -19,12 +20,19 @@ import (
 
 // Helper method to convert a map into a json query string
 func JsonToQueryString(json map[string]any) string {
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(json))
+	for key := range json {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	out := ""
-	for key, value := range json {
+	for _, key := range keys {
 		if len(out) > 0 {
 			out += "&"
 		}
-		item := fmt.Sprintf("%s=%v", url.PathEscape(key), value.(any))
+		item := fmt.Sprintf("%s=%v", url.PathEscape(key), json[key])
 		out += item
 	}
 	return out
