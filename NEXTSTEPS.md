@@ -10,6 +10,7 @@
 - [x] Add client-side codec support (JSONCodec, BinaryCodec)
 - [x] Create multiplayer demo with gameId-based rooms
 - [x] Manual browser testing of grpcws-demo multiplayer
+- [x] Create LLMGUIDE.md for LLM discoverability
 - [ ] Publish TypeScript client to npm
 
 ## Future Enhancements
