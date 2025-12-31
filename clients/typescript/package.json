@@ -1,0 +1,41 @@
+{
+  "name": "@panyam/servicekit-client",
+  "version": "0.1.0",
+  "description": "TypeScript client for gRPC-WebSocket streaming protocol",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "browser": "dist/servicekit-client.browser.js",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc && npm run build:browser",
+    "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=ServiceKit --outfile=dist/servicekit-client.browser.js",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "grpc",
+    "websocket",
+    "streaming",
+    "protobuf",
+    "typescript",
+    "servicekit"
+  ],
+  "author": "panyam",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panyam/servicekit.git",
+    "directory": "clients/typescript"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

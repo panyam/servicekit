@@ -26,11 +26,16 @@
         .status.connected { background: #4CAF50; }
         .status.disconnected { background: #f44336; }
         code { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+        .client-info { background: #e3f2fd; border: 1px solid #bbdefb; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
     <h1>gRPC-WebSocket Demo</h1>
     <p>This demo shows the <code>grpcws</code> package for gRPC streaming over WebSocket using real protobuf messages.</p>
+
+    <div class="client-info">
+        Using <code>@panyam/servicekit-client</code> library - GRPCWSClient handles protocol automatically (ping/pong, envelope wrapping).
+    </div>
 
     <div class="section">
         <h3><span class="status disconnected" id="subscribe-status"></span>Server Streaming: Subscribe to Game Events</h3>
@@ -68,8 +73,14 @@
         <div id="sync-log" class="log"></div>
     </div>
 
+    <!-- Load the ServiceKit client library -->
+    <script src="/servicekit-client.js"></script>
+
     <script>
-        let subscribeWs = null, commandsWs = null, syncWs = null;
+        // Use the ServiceKit client library
+        const { GRPCWSClient } = ServiceKit;
+
+        let subscribeClient = null, commandsClient = null, syncClient = null;
         let commandNum = 0, actionNum = 0;
 
         function setStatus(id, connected) {
@@ -86,113 +97,202 @@
             while (el.children.length > 100) el.removeChild(el.firstChild);
         }
 
-        function handleMessage(logId, e, ws) {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'ping') {
-                ws.send(JSON.stringify({type: 'pong', pingId: msg.pingId}));
-                log(logId, 'Ping ' + msg.pingId, 'ping');
-            } else if (msg.type === 'data') {
-                log(logId, 'Data: ' + JSON.stringify(msg.data), 'data');
-            } else if (msg.type === 'stream_end') {
-                log(logId, 'Stream ended', 'info');
-            } else if (msg.type === 'error') {
-                log(logId, 'Error: ' + msg.error, 'error');
-            } else {
-                log(logId, 'Unknown: ' + JSON.stringify(msg));
-            }
-        }
-
         // Subscribe (Server Streaming)
         function connectSubscribe() {
-            if (subscribeWs) subscribeWs.close();
+            if (subscribeClient) subscribeClient.close();
+
             const gameId = document.getElementById('subscribe-game-id').value || 'game123';
             const playerId = document.getElementById('subscribe-player-id').value || 'player1';
 
-            subscribeWs = new WebSocket('ws://' + location.host + '/ws/v1/subscribe');
-            subscribeWs.onopen = () => {
-                log('subscribe-log', 'Connected', 'info');
-                setStatus('subscribe-status', true);
-                // Send initial request
-                subscribeWs.send(JSON.stringify({
-                    type: 'data',
-                    data: { gameId: gameId, playerId: playerId }
-                }));
-                log('subscribe-log', 'Subscribed to game: ' + gameId, 'info');
+            subscribeClient = new GRPCWSClient();
+
+            subscribeClient.onMessage = (data) => {
+                log('subscribe-log', 'Data: ' + JSON.stringify(data), 'data');
             };
-            subscribeWs.onclose = () => { log('subscribe-log', 'Disconnected', 'error'); setStatus('subscribe-status', false); };
-            subscribeWs.onmessage = (e) => handleMessage('subscribe-log', e, subscribeWs);
+
+            subscribeClient.onStreamEnd = () => {
+                log('subscribe-log', 'Stream ended', 'info');
+            };
+
+            subscribeClient.onError = (error) => {
+                log('subscribe-log', 'Error: ' + error, 'error');
+            };
+
+            subscribeClient.onClose = () => {
+                log('subscribe-log', 'Disconnected', 'error');
+                setStatus('subscribe-status', false);
+            };
+
+            subscribeClient.onPing = (pingId) => {
+                log('subscribe-log', 'Ping ' + pingId, 'ping');
+            };
+
+            subscribeClient.connect('ws://' + location.host + '/ws/v1/subscribe')
+                .then(() => {
+                    log('subscribe-log', 'Connected', 'info');
+                    setStatus('subscribe-status', true);
+                    // Send initial subscribe request
+                    subscribeClient.send({ gameId: gameId, playerId: playerId });
+                    log('subscribe-log', 'Subscribed to game: ' + gameId, 'info');
+                })
+                .catch(err => {
+                    log('subscribe-log', 'Connection failed: ' + err, 'error');
+                });
         }
-        function disconnectSubscribe() { if (subscribeWs) { subscribeWs.close(); subscribeWs = null; } }
+
+        function disconnectSubscribe() {
+            if (subscribeClient) {
+                subscribeClient.close();
+                subscribeClient = null;
+            }
+        }
 
         // Commands (Client Streaming)
         function connectCommands() {
-            if (commandsWs) commandsWs.close();
+            if (commandsClient) commandsClient.close();
             commandNum = 0;
-            commandsWs = new WebSocket('ws://' + location.host + '/ws/v1/commands');
-            commandsWs.onopen = () => { log('commands-log', 'Connected - send commands then click "End Stream"', 'info'); setStatus('commands-status', true); };
-            commandsWs.onclose = () => { log('commands-log', 'Disconnected', 'error'); setStatus('commands-status', false); };
-            commandsWs.onmessage = (e) => handleMessage('commands-log', e, commandsWs);
+
+            commandsClient = new GRPCWSClient();
+
+            commandsClient.onMessage = (data) => {
+                log('commands-log', 'Data: ' + JSON.stringify(data), 'data');
+            };
+
+            commandsClient.onStreamEnd = () => {
+                log('commands-log', 'Stream ended', 'info');
+            };
+
+            commandsClient.onError = (error) => {
+                log('commands-log', 'Error: ' + error, 'error');
+            };
+
+            commandsClient.onClose = () => {
+                log('commands-log', 'Disconnected', 'error');
+                setStatus('commands-status', false);
+            };
+
+            commandsClient.onPing = (pingId) => {
+                log('commands-log', 'Ping ' + pingId, 'ping');
+            };
+
+            commandsClient.connect('ws://' + location.host + '/ws/v1/commands')
+                .then(() => {
+                    log('commands-log', 'Connected - send commands then click "End Stream"', 'info');
+                    setStatus('commands-status', true);
+                })
+                .catch(err => {
+                    log('commands-log', 'Connection failed: ' + err, 'error');
+                });
         }
+
         function sendCommand() {
-            if (!commandsWs || commandsWs.readyState !== 1) { log('commands-log', 'Not connected', 'error'); return; }
+            if (!commandsClient || !commandsClient.isConnected) {
+                log('commands-log', 'Not connected', 'error');
+                return;
+            }
             commandNum++;
             const cmdType = document.getElementById('command-type').value || 'attack';
             const cmd = {
-                type: 'data',
-                data: {
-                    commandId: 'cmd-' + commandNum,
-                    commandType: cmdType,
-                    timestamp: Date.now(),
-                    parameters: { target: 'enemy-' + (commandNum % 5) }
-                }
+                commandId: 'cmd-' + commandNum,
+                commandType: cmdType,
+                timestamp: Date.now(),
+                parameters: { target: 'enemy-' + (commandNum % 5) }
             };
-            commandsWs.send(JSON.stringify(cmd));
+            commandsClient.send(cmd);
             log('commands-log', 'Sent command: ' + cmdType + ' (cmd-' + commandNum + ')', 'info');
         }
+
         function endCommands() {
-            if (!commandsWs || commandsWs.readyState !== 1) { log('commands-log', 'Not connected', 'error'); return; }
-            commandsWs.send(JSON.stringify({type: 'end_send'}));
+            if (!commandsClient || !commandsClient.isConnected) {
+                log('commands-log', 'Not connected', 'error');
+                return;
+            }
+            commandsClient.endSend();
             log('commands-log', 'Requested summary...', 'info');
         }
-        function disconnectCommands() { if (commandsWs) { commandsWs.close(); commandsWs = null; } }
+
+        function disconnectCommands() {
+            if (commandsClient) {
+                commandsClient.close();
+                commandsClient = null;
+            }
+        }
 
         // Sync (Bidirectional Streaming)
         function connectSync() {
-            if (syncWs) syncWs.close();
+            if (syncClient) syncClient.close();
             actionNum = 0;
-            syncWs = new WebSocket('ws://' + location.host + '/ws/v1/sync');
-            syncWs.onopen = () => { log('sync-log', 'Connected - send actions to see game state updates', 'info'); setStatus('sync-status', true); };
-            syncWs.onclose = () => { log('sync-log', 'Disconnected', 'error'); setStatus('sync-status', false); };
-            syncWs.onmessage = (e) => handleMessage('sync-log', e, syncWs);
+
+            syncClient = new GRPCWSClient();
+
+            syncClient.onMessage = (data) => {
+                log('sync-log', 'Data: ' + JSON.stringify(data), 'data');
+            };
+
+            syncClient.onStreamEnd = () => {
+                log('sync-log', 'Stream ended', 'info');
+            };
+
+            syncClient.onError = (error) => {
+                log('sync-log', 'Error: ' + error, 'error');
+            };
+
+            syncClient.onClose = () => {
+                log('sync-log', 'Disconnected', 'error');
+                setStatus('sync-status', false);
+            };
+
+            syncClient.onPing = (pingId) => {
+                log('sync-log', 'Ping ' + pingId, 'ping');
+            };
+
+            syncClient.connect('ws://' + location.host + '/ws/v1/sync')
+                .then(() => {
+                    log('sync-log', 'Connected - send actions to see game state updates', 'info');
+                    setStatus('sync-status', true);
+                })
+                .catch(err => {
+                    log('sync-log', 'Connection failed: ' + err, 'error');
+                });
         }
+
         function sendAction(action) {
-            if (!syncWs || syncWs.readyState !== 1) { log('sync-log', 'Not connected', 'error'); return; }
+            if (!syncClient || !syncClient.isConnected) {
+                log('sync-log', 'Not connected', 'error');
+                return;
+            }
             actionNum++;
             const playerId = document.getElementById('sync-player-id').value || 'player1';
             const msg = {
-                type: 'data',
-                data: {
-                    actionId: 'action-' + actionNum,
-                    playerId: playerId,
-                    timestamp: Date.now(),
-                    ...action
-                }
+                actionId: 'action-' + actionNum,
+                playerId: playerId,
+                timestamp: Date.now(),
+                ...action
             };
-            syncWs.send(JSON.stringify(msg));
+            syncClient.send(msg);
         }
+
         function sendMove() {
             sendAction({ move: { x: Math.random() * 100, y: 0, z: Math.random() * 100 } });
             log('sync-log', 'Sent: Move', 'info');
         }
+
         function sendAttack() {
             sendAction({ attack: { targetId: 'enemy-1', weaponId: 'sword' } });
             log('sync-log', 'Sent: Attack', 'info');
         }
+
         function sendUseItem() {
             sendAction({ useItem: { itemId: 'potion-1', targetId: 'self' } });
             log('sync-log', 'Sent: Use Item', 'info');
         }
-        function disconnectSync() { if (syncWs) { syncWs.close(); syncWs = null; } }
+
+        function disconnectSync() {
+            if (syncClient) {
+                syncClient.close();
+                syncClient = null;
+            }
+        }
     </script>
 </body>
 </html>

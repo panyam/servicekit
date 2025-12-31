@@ -27,6 +27,13 @@ New package for gRPC-over-WebSocket:
 - JSON envelope protocol with protojson payloads
 - Full lifecycle management (heartbeats, cancellation, graceful close)
 
+### TypeScript Client (`clients/typescript/`)
+New TypeScript client library (`@panyam/servicekit-client`):
+- **BaseWSClient**: Low-level WebSocket with auto ping/pong (for http/JSONConn)
+- **GRPCWSClient**: gRPC-style streaming with envelope protocol (for grpcws)
+- **TypedGRPCWSClient<TIn, TOut>**: Type-safe wrapper for protobuf types
+- Works with any TS protoc plugin (@bufbuild/protobuf, ts-proto, protobuf-ts)
+
 ## Key Patterns
 
 ### Embedding BaseConn
@@ -64,4 +71,5 @@ router.HandleFunc("/ws", gohttp.WSServe(&MyHandler{}, config))
 | `http/baseconn.go` | Generic BaseConn[I, O] |
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
+| `clients/typescript/` | TypeScript client library |
 | `cmd/grpcws-demo/` | Working demo with proto files |

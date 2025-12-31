@@ -41,6 +41,12 @@ func main() {
 		w.Write([]byte(indexHTML))
 	})
 
+	// Serve the client library from the filesystem (allows symlinks during development)
+	router.HandleFunc("/servicekit-client.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		http.ServeFile(w, r, "../../clients/typescript/dist/servicekit-client.browser.js")
+	})
+
 	// WebSocket endpoints using grpcws handlers
 	wsRouter := router.PathPrefix("/ws").Subrouter()
 

@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Binaries (at root level only)
+/grpcws-demo
+/timews
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Temporary files
+thoughts
+*.log
