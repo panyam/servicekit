@@ -1,6 +1,6 @@
 {
   "name": "@panyam/servicekit-client",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "description": "TypeScript client for gRPC-WebSocket streaming protocol",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
