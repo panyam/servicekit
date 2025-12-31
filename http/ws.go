@@ -11,31 +11,55 @@ import (
 	conc "github.com/panyam/gocurrent"
 )
 
-// Represents a bidirectional websocket connection
+// WSConn represents a bidirectional WebSocket connection that can handle
+// typed messages of type I. It extends BiDirStreamConn with WebSocket-specific
+// functionality for reading messages and connection initialization.
+//
+// Implementations typically embed BaseConn[I, O] and override HandleMessage.
+// The type parameter I represents the input message type received from clients.
 type WSConn[I any] interface {
 	BiDirStreamConn[I]
 
-	// Reads the next message from the ws conn.
+	// ReadMessage reads and decodes the next message from the WebSocket connection.
+	// This is called in a loop by WSHandleConn to process incoming messages.
+	// Returns the decoded message or an error (including io.EOF on close).
 	ReadMessage(w *websocket.Conn) (I, error)
 
-	// Callback to be called when the WS connection is started
+	// OnStart is called when the WebSocket connection is established.
+	// Use this to initialize the connection (e.g., set up writers, start goroutines).
+	// Return an error to reject and close the connection.
 	OnStart(conn *websocket.Conn) error
 }
 
-// Handlers validate a http request and decide whether they can/should be upgraded
-// to create and begin a websocket connection (WSConn)
+// WSHandler validates HTTP requests and creates WebSocket connections.
+// It acts as a factory for WSConn instances, typically performing authentication
+// and authorization before allowing the upgrade.
+//
+// Type parameters:
+//   - I: The input message type that the connection will handle
+//   - S: The specific WSConn implementation type (must implement WSConn[I])
 type WSHandler[I any, S WSConn[I]] interface {
-	// Called to validate an http request to see if it is upgradeable to a ws conn
+	// Validate checks if the HTTP request should be upgraded to a WebSocket.
+	// Return (connection, true) to proceed with the upgrade.
+	// Return (nil, false) to reject (the handler should write the error response).
 	Validate(w http.ResponseWriter, r *http.Request) (S, bool)
 }
 
-// Extends BiDirStreamConfig to include Websocket specific configrations
+// WSConnConfig combines BiDirStreamConfig with WebSocket-specific settings.
+// It controls connection upgrade behavior and lifecycle timing.
 type WSConnConfig struct {
 	*BiDirStreamConfig
+	// Upgrader handles the HTTP to WebSocket protocol upgrade.
+	// Configure ReadBufferSize, WriteBufferSize, and CheckOrigin as needed.
 	Upgrader websocket.Upgrader
 }
 
-// This method creates a WSConnConfig with a default websocket Upgrader
+// DefaultWSConnConfig returns a WSConnConfig with sensible defaults:
+//   - ReadBufferSize: 1024 bytes
+//   - WriteBufferSize: 1024 bytes
+//   - CheckOrigin: allows all origins (configure for production!)
+//   - PingPeriod: 30 seconds
+//   - PongPeriod: 300 seconds (5 minutes)
 func DefaultWSConnConfig() *WSConnConfig {
 	return &WSConnConfig{
 		Upgrader: websocket.Upgrader{
@@ -47,12 +71,23 @@ func DefaultWSConnConfig() *WSConnConfig {
 	}
 }
 
-// Returns a http.HandlerFunc that takes care of upgrading the request to a Websocket connection
-// and handling its lifecycle by delegating important activities to the WSHandler type
-// This method is often used to create a handler for particular routes on http routers.
+// WSServe creates an http.HandlerFunc that upgrades HTTP requests to WebSocket
+// connections and manages their lifecycle. This is the primary entry point for
+// creating WebSocket endpoints.
 //
-// The handler parameter is responsible for validating (eg authenticating/authorizing) the request
-// to ensure an upgrade is allowed as well as handling messages received on the upgraded connection.
+// The handler validates incoming requests and creates connection instances.
+// The config controls upgrade behavior and timing; if nil, DefaultWSConnConfig is used.
+//
+// Example:
+//
+//	router.HandleFunc("/ws", gohttp.WSServe(&MyHandler{}, nil))
+//
+// The lifecycle is:
+//  1. handler.Validate() is called to check the request
+//  2. If valid, the connection is upgraded to WebSocket
+//  3. conn.OnStart() is called to initialize the connection
+//  4. Messages are read and passed to conn.HandleMessage()
+//  5. On close, conn.OnClose() is called for cleanup
 func WSServe[I any, S WSConn[I]](handler WSHandler[I, S], config *WSConnConfig) http.HandlerFunc {
 	if config == nil {
 		config = DefaultWSConnConfig()
@@ -77,9 +112,18 @@ func WSServe[I any, S WSConn[I]](handler WSHandler[I, S], config *WSConnConfig) 
 	}
 }
 
-// Once a websocket connection is established (either by the server or by the client),
-// this method handles the lifecycle of the connection by taking care of (healthceck) pings,
-// handling closures, handling received messages.
+// WSHandleConn manages the lifecycle of an established WebSocket connection.
+// It handles:
+//   - Periodic ping messages for connection health checks
+//   - Timeout detection when no data is received within PongPeriod
+//   - Message reading and dispatching to ctx.HandleMessage()
+//   - Error handling via ctx.OnError()
+//   - Clean shutdown via ctx.OnClose()
+//
+// This function is called automatically by WSServe, but can also be used directly
+// when you have an established WebSocket connection from another source.
+//
+// The function blocks until the connection is closed or an unrecoverable error occurs.
 func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSConnConfig) {
 	if config == nil {
 		config = DefaultWSConnConfig()

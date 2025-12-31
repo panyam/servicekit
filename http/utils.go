@@ -18,7 +18,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Helper method to convert a map into a json query string
+// JsonToQueryString converts a map to a URL query string.
+// Keys are sorted alphabetically for deterministic output.
+// Values are converted to strings using fmt.Sprintf("%v", value).
+//
+// Example:
+//
+//	params := map[string]any{"name": "John", "age": 30}
+//	qs := JsonToQueryString(params) // "age=30&name=John"
 func JsonToQueryString(json map[string]any) string {
 	// Sort keys for deterministic output
 	keys := make([]string, 0, len(json))
@@ -38,6 +45,13 @@ func JsonToQueryString(json map[string]any) string {
 	return out
 }
 
+// SendJsonResponse writes a JSON response to the http.ResponseWriter.
+// If err is nil, resp is marshaled to JSON and written with status 200 OK.
+// If err is non-nil, an appropriate HTTP error code is set based on the gRPC
+// status code (if present), and an error object is returned in the response body.
+//
+// The function handles gRPC status errors by extracting the code and message,
+// and maps them to appropriate HTTP status codes via ErrorToHttpCode.
 func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
 	output := resp
 	httpCode := ErrorToHttpCode(err)
@@ -64,6 +78,14 @@ func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
 	writer.Write(jsonResp)
 }
 
+// ErrorToHttpCode converts a Go error to an appropriate HTTP status code.
+// If err is nil, returns http.StatusOK (200).
+// If err contains a gRPC status, maps it to the corresponding HTTP code:
+//   - codes.PermissionDenied → 403 Forbidden
+//   - codes.NotFound → 404 Not Found
+//   - codes.AlreadyExists → 409 Conflict
+//   - codes.InvalidArgument → 400 Bad Request
+//   - Other errors → 500 Internal Server Error
 func ErrorToHttpCode(err error) int {
 	httpCode := http.StatusOK
 	if err != nil {
@@ -86,6 +108,10 @@ func ErrorToHttpCode(err error) int {
 	return httpCode
 }
 
+// WSConnWriteError writes an error message to a WebSocket connection.
+// If err is nil or io.EOF, no message is sent and nil is returned.
+// For gRPC status errors, the error code is extracted and sent as JSON.
+// The message is sent as a text frame containing JSON: {"error": <code>}
 func WSConnWriteError(wsConn *websocket.Conn, err error) error {
 	if err != nil && err != io.EOF {
 		// Some kind of streamer rpc error
@@ -106,6 +132,9 @@ func WSConnWriteError(wsConn *websocket.Conn, err error) error {
 	return nil
 }
 
+// WSConnWriteMessage writes a JSON message to a WebSocket connection.
+// The message is marshaled to JSON and sent as a text frame.
+// Returns any error from marshaling or writing.
 func WSConnWriteMessage(wsConn *websocket.Conn, msg any) error {
 	jsonResp, err := json.Marshal(msg)
 	if err != nil {
@@ -118,6 +147,15 @@ func WSConnWriteMessage(wsConn *websocket.Conn, msg any) error {
 	return outerr
 }
 
+// WSConnJSONReaderWriter creates concurrent reader and writer for JSON messages
+// over a WebSocket connection. The reader decodes incoming JSON messages into
+// StrMap (map[string]any), and the writer sends outgoing StrMap messages as JSON.
+//
+// The reader handles connection close errors gracefully by converting them to
+// net.ErrClosed. The writer handles io.EOF as a normal stream end and uses
+// WSConnWriteError for error messages.
+//
+// This is useful for creating bidirectional JSON message streams over WebSocket.
 func WSConnJSONReaderWriter(conn *websocket.Conn) (reader *conc.Reader[gut.StrMap], writer *conc.Writer[conc.Message[gut.StrMap]]) {
 	reader = conc.NewReader(func() (out gut.StrMap, err error) {
 		err = conn.ReadJSON(&out)
@@ -141,7 +179,18 @@ func WSConnJSONReaderWriter(conn *websocket.Conn) (reader *conc.Reader[gut.StrMa
 	return
 }
 
-// Returns a normalized WS url equivalent for a given http url.
+// NormalizeWsUrl converts an HTTP(S) URL to its WebSocket equivalent.
+// It performs the following transformations:
+//   - Removes trailing slashes
+//   - Converts "http:" to "ws:"
+//   - Converts "https:" to "wss:"
+//
+// URLs that are already WebSocket URLs (ws: or wss:) are returned unchanged
+// after removing any trailing slash.
+//
+// Example:
+//
+//	NormalizeWsUrl("https://example.com/ws/") // "wss://example.com/ws"
 func NormalizeWsUrl(httpOrWsUrl string) string {
 	if strings.HasSuffix(httpOrWsUrl, "/") {
 		httpOrWsUrl = (httpOrWsUrl)[:len(httpOrWsUrl)-1]

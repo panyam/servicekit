@@ -18,6 +18,8 @@ with automatic connection management, heartbeat detection, and lifecycle hooks.
   - Thread-safe message broadcasting to multiple clients
   - Automatic ping-pong mechanism to prevent connection timeouts
   - Type-safe message handling with Go generics
+  - Pluggable Codec system for flexible message encoding (JSON, Protobuf)
+  - Generic BaseConn[I, O] for typed input/output messages
   - Built-in JSON message support with JSONConn
   - Configurable timeouts and intervals for different deployment scenarios
 

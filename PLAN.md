@@ -373,7 +373,7 @@ Demonstrate all three streaming modes with a mock game service.
 ### Step 5: Documentation
 - [x] Update `README.md`
 - [x] Create `grpcws/README.md`
-- [ ] Update code comments/godoc
+- [x] Update code comments/godoc
 
 ### Step 6: Testing & Validation
 - [x] Update `http/ws_test.go`
@@ -513,8 +513,14 @@ Demonstrate all three streaming modes with a mock game service.
   - Interface compliance
 - All tests passing
 
+### 2025-12-30: Code Comments & Godoc Complete
+- Enhanced documentation in `http/doc.go` (added Codec system to Key Features)
+- Enhanced `http/bidir.go` with comprehensive interface documentation
+- Enhanced `http/utils.go` with function documentation and examples
+- Enhanced `http/ws.go` with interface and function documentation
+- All tests passing
+
 ### Remaining Work
-- Update code comments/godoc
-- Manual testing with browser client
+- Manual testing with browser client (optional)
 
 *Last Updated: 2025-12-30*

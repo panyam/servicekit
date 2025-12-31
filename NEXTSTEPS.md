@@ -2,7 +2,7 @@
 
 ## Immediate Tasks
 
-- [ ] Update code comments and godoc for all new files
+- [x] Update code comments and godoc for all new files
 - [ ] Manual browser testing of grpcws-demo
 
 ## Future Enhancements
