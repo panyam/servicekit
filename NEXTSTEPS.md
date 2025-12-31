@@ -11,7 +11,7 @@
 - [x] Create multiplayer demo with gameId-based rooms
 - [x] Manual browser testing of grpcws-demo multiplayer
 - [x] Create LLMGUIDE.md for LLM discoverability
-- [ ] Publish TypeScript client to npm
+- [x] Publish TypeScript client to npm (@panyam/servicekit-client)
 
 ## Future Enhancements
 
