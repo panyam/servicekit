@@ -1,6 +1,6 @@
 {
   "name": "@panyam/servicekit-client",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "TypeScript client for gRPC-WebSocket streaming protocol",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -11,7 +11,8 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc && npm run build:browser",
+    "build": "tsc && npm run build:esm && npm run build:browser",
+    "build:esm": "esbuild src/index.ts --bundle --format=esm --outfile=dist/index.mjs",
     "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=ServiceKit --outfile=dist/servicekit-client.browser.js",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
