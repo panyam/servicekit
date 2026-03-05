@@ -61,7 +61,7 @@
  * @packageDocumentation
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TypedGRPCWSClient = exports.GRPCWSClient = exports.BaseWSClient = exports.BinaryCodec = exports.JSONCodec = exports.ReadyState = void 0;
+exports.createMockWSPair = exports.TypedGRPCWSClient = exports.GRPCWSClient = exports.BaseWSClient = exports.BinaryCodec = exports.JSONCodec = exports.ReadyState = void 0;
 // Types and Codecs
 var types_1 = require("./types");
 Object.defineProperty(exports, "ReadyState", { enumerable: true, get: function () { return types_1.ReadyState; } });
@@ -74,4 +74,7 @@ var grpcws_client_1 = require("./grpcws-client");
 Object.defineProperty(exports, "GRPCWSClient", { enumerable: true, get: function () { return grpcws_client_1.GRPCWSClient; } });
 var typed_client_1 = require("./typed-client");
 Object.defineProperty(exports, "TypedGRPCWSClient", { enumerable: true, get: function () { return typed_client_1.TypedGRPCWSClient; } });
+// Test utilities
+var mock_1 = require("./mock");
+Object.defineProperty(exports, "createMockWSPair", { enumerable: true, get: function () { return mock_1.createMockWSPair; } });
 //# sourceMappingURL=index.js.map

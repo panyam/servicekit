@@ -12,6 +12,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GRPCWSClient = void 0;
 const base_client_1 = require("./base-client");
+const mock_1 = require("./mock");
 /**
  * WebSocket client for gRPC-style streaming protocol.
  *
@@ -118,6 +119,65 @@ class GRPCWSClient {
      */
     get readyState() {
         return this.base.readyState;
+    }
+    /**
+     * Create a mock client + controller pair for testing.
+     *
+     * Returns a pre-wired GRPCWSClient backed by a fake WebSocket, so
+     * consumers don't need to mock WebSocket internals or know about the
+     * servicekit envelope protocol.
+     *
+     * @example
+     * ```typescript
+     * const { client, controller } = GRPCWSClient.createMock();
+     *
+     * client.onMessage = (data) => { handle(data); };
+     * client.connect('ws://test');
+     * controller.simulateOpen();
+     *
+     * controller.simulateMessage({ event: { case: 'roomJoined', value: {} } });
+     * expect(controller.sentMessages).toHaveLength(0);
+     *
+     * client.send({ action: { case: 'join' } });
+     * expect(controller.sentMessages[0]).toMatchObject({ action: { case: 'join' } });
+     * ```
+     */
+    static createMock() {
+        const { WebSocket, controller: wsCtrl } = (0, mock_1.createMockWSPair)();
+        const client = new GRPCWSClient({ WebSocket });
+        const controller = {
+            get sentMessages() {
+                const messages = [];
+                for (const raw of wsCtrl.sentRaw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed.type === 'data') {
+                            messages.push(parsed.data);
+                        }
+                    }
+                    catch {
+                        // Skip non-JSON messages (e.g. binary)
+                    }
+                }
+                return messages;
+            },
+            simulateOpen() {
+                wsCtrl.simulateOpen();
+            },
+            simulateMessage(data) {
+                wsCtrl.simulateRawMessage(JSON.stringify({ type: 'data', data }));
+            },
+            simulateError(message) {
+                wsCtrl.simulateRawMessage(JSON.stringify({ type: 'error', error: message ?? 'Mock error' }));
+            },
+            simulateClose(code) {
+                wsCtrl.simulateClose(code);
+            },
+            get readyState() {
+                return wsCtrl.readyState;
+            },
+        };
+        return { client, controller };
     }
     /**
      * Set up handlers on the base client to process grpcws envelope messages.

@@ -61,6 +61,7 @@
  */
 export { MessageType, ControlMessage, ReadyState, ReadyStateType, ClientOptions, Codec, JSONCodec, BinaryCodec, MessageHandler, ErrorHandler, VoidHandler, } from './types';
 export { BaseWSClient } from './base-client';
-export { GRPCWSClient } from './grpcws-client';
+export { GRPCWSClient, MockController } from './grpcws-client';
 export { TypedGRPCWSClient } from './typed-client';
+export { createMockWSPair, MockWSController } from './mock';
 //# sourceMappingURL=index.d.ts.map

@@ -10,6 +10,36 @@
  */
 import { ClientOptions, MessageHandler, ErrorHandler, VoidHandler } from './types';
 /**
+ * Mock controller for testing GRPCWSClient without real WebSocket connections.
+ *
+ * The controller wraps/unwraps the servicekit envelope automatically —
+ * consumers only see application-level data.
+ *
+ * @example
+ * ```typescript
+ * const { client, controller } = GRPCWSClient.createMock();
+ * client.onMessage = (data) => received.push(data);
+ * client.connect('ws://test');
+ * controller.simulateOpen();
+ * controller.simulateMessage({ event: 'joined' });
+ * expect(received).toEqual([{ event: 'joined' }]);
+ * ```
+ */
+export interface MockController {
+    /** Messages sent by the client (already unwrapped from envelope) */
+    readonly sentMessages: unknown[];
+    /** Simulate WebSocket open — resolves the connect() Promise */
+    simulateOpen(): void;
+    /** Simulate receiving a data message (auto-wraps in {type: "data"} envelope) */
+    simulateMessage(data: unknown): void;
+    /** Simulate a server error (delivers {type: "error"} envelope to onError) */
+    simulateError(message?: string): void;
+    /** Simulate WebSocket close */
+    simulateClose(code?: number): void;
+    /** Current WebSocket ready state */
+    readonly readyState: number;
+}
+/**
  * WebSocket client for gRPC-style streaming protocol.
  *
  * Implements the grpcws protocol with message envelope handling:
@@ -96,6 +126,32 @@ export declare class GRPCWSClient {
      * Get the WebSocket ready state.
      */
     get readyState(): number;
+    /**
+     * Create a mock client + controller pair for testing.
+     *
+     * Returns a pre-wired GRPCWSClient backed by a fake WebSocket, so
+     * consumers don't need to mock WebSocket internals or know about the
+     * servicekit envelope protocol.
+     *
+     * @example
+     * ```typescript
+     * const { client, controller } = GRPCWSClient.createMock();
+     *
+     * client.onMessage = (data) => { handle(data); };
+     * client.connect('ws://test');
+     * controller.simulateOpen();
+     *
+     * controller.simulateMessage({ event: { case: 'roomJoined', value: {} } });
+     * expect(controller.sentMessages).toHaveLength(0);
+     *
+     * client.send({ action: { case: 'join' } });
+     * expect(controller.sentMessages[0]).toMatchObject({ action: { case: 'join' } });
+     * ```
+     */
+    static createMock(): {
+        client: GRPCWSClient;
+        controller: MockController;
+    };
     /**
      * Set up handlers on the base client to process grpcws envelope messages.
      */

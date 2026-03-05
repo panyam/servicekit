@@ -26,7 +26,8 @@ var ServiceKit = (() => {
     GRPCWSClient: () => GRPCWSClient,
     JSONCodec: () => JSONCodec,
     ReadyState: () => ReadyState,
-    TypedGRPCWSClient: () => TypedGRPCWSClient
+    TypedGRPCWSClient: () => TypedGRPCWSClient,
+    createMockWSPair: () => createMockWSPair
   });
 
   // src/types.ts
@@ -227,8 +228,68 @@ var ServiceKit = (() => {
     }
   };
 
+  // src/mock.ts
+  function createMockWSPair() {
+    let ws = null;
+    class MockWebSocket {
+      constructor(_url) {
+        this.readyState = ReadyState.CONNECTING;
+        this.binaryType = "";
+        this.onopen = null;
+        this.onmessage = null;
+        this.onerror = null;
+        this.onclose = null;
+        this._sent = [];
+        ws = this;
+      }
+      send(data) {
+        this._sent.push(data);
+      }
+      close() {
+        this.readyState = ReadyState.CLOSED;
+        this.onclose?.({});
+      }
+      get sentRaw() {
+        return this._sent;
+      }
+    }
+    const assertConnected = (method) => {
+      if (!ws) throw new Error(`Call client.connect() before ${method}()`);
+    };
+    const controller = {
+      get sentRaw() {
+        return ws?.sentRaw ?? [];
+      },
+      simulateOpen() {
+        assertConnected("simulateOpen");
+        ws.readyState = ReadyState.OPEN;
+        ws.onopen?.({});
+      },
+      simulateRawMessage(data) {
+        assertConnected("simulateRawMessage");
+        ws.onmessage?.({ data });
+      },
+      simulateWsError() {
+        assertConnected("simulateWsError");
+        ws.onerror?.({});
+      },
+      simulateClose(code) {
+        assertConnected("simulateClose");
+        ws.readyState = ReadyState.CLOSED;
+        ws.onclose?.({});
+      },
+      get readyState() {
+        return ws?.readyState ?? ReadyState.CLOSED;
+      }
+    };
+    return {
+      WebSocket: MockWebSocket,
+      controller
+    };
+  }
+
   // src/grpcws-client.ts
-  var GRPCWSClient = class {
+  var GRPCWSClient = class _GRPCWSClient {
     constructor(options = {}) {
       /** Called when a data message is received */
       this.onMessage = () => {
@@ -300,6 +361,65 @@ var ServiceKit = (() => {
      */
     get readyState() {
       return this.base.readyState;
+    }
+    /**
+     * Create a mock client + controller pair for testing.
+     *
+     * Returns a pre-wired GRPCWSClient backed by a fake WebSocket, so
+     * consumers don't need to mock WebSocket internals or know about the
+     * servicekit envelope protocol.
+     *
+     * @example
+     * ```typescript
+     * const { client, controller } = GRPCWSClient.createMock();
+     *
+     * client.onMessage = (data) => { handle(data); };
+     * client.connect('ws://test');
+     * controller.simulateOpen();
+     *
+     * controller.simulateMessage({ event: { case: 'roomJoined', value: {} } });
+     * expect(controller.sentMessages).toHaveLength(0);
+     *
+     * client.send({ action: { case: 'join' } });
+     * expect(controller.sentMessages[0]).toMatchObject({ action: { case: 'join' } });
+     * ```
+     */
+    static createMock() {
+      const { WebSocket, controller: wsCtrl } = createMockWSPair();
+      const client = new _GRPCWSClient({ WebSocket });
+      const controller = {
+        get sentMessages() {
+          const messages = [];
+          for (const raw of wsCtrl.sentRaw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed.type === "data") {
+                messages.push(parsed.data);
+              }
+            } catch {
+            }
+          }
+          return messages;
+        },
+        simulateOpen() {
+          wsCtrl.simulateOpen();
+        },
+        simulateMessage(data) {
+          wsCtrl.simulateRawMessage(JSON.stringify({ type: "data", data }));
+        },
+        simulateError(message) {
+          wsCtrl.simulateRawMessage(
+            JSON.stringify({ type: "error", error: message ?? "Mock error" })
+          );
+        },
+        simulateClose(code) {
+          wsCtrl.simulateClose(code);
+        },
+        get readyState() {
+          return wsCtrl.readyState;
+        }
+      };
+      return { client, controller };
     }
     /**
      * Set up handlers on the base client to process grpcws envelope messages.
