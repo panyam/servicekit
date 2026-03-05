@@ -68,6 +68,9 @@ New TypeScript client library (`@panyam/servicekit-client`):
 - **JSONCodec**: Default, matches server JSONCodec
 - **BinaryCodec**: For binary protobuf, matches server BinaryProtoCodec
 - Works with any TS protoc plugin (@bufbuild/protobuf, ts-proto, protobuf-ts)
+- **Mock utilities** for testing without real WebSocket connections:
+  - `createMockWSPair()`: Reusable mock WebSocket for any client
+  - `GRPCWSClient.createMock()`: Envelope-aware mock with `MockController`
 
 ### Multiplayer Demo (`cmd/grpcws-demo/`)
 GameHub-based multiplayer demo showing real-time sync:
@@ -115,5 +118,5 @@ router.HandleFunc("/ws", gohttp.WSServe(&MyHandler{}, config))
 | `http/baseconn.go` | Generic BaseConn[I, O], OutgoingMessage union type |
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
-| `clients/typescript/` | TypeScript client library with codec support |
+| `clients/typescript/` | TypeScript client library with codec support and mock utilities |
 | `cmd/grpcws-demo/` | Multiplayer game demo with GameHub |

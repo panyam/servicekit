@@ -194,6 +194,36 @@ client.endSend();
 client.close();
 ```
 
+### Template 5: Testing GRPCWSClient (Mock)
+
+```typescript
+import { GRPCWSClient } from '@panyam/servicekit-client';
+
+// Create mock client + controller (no real WebSocket needed)
+const { client, controller } = GRPCWSClient.createMock();
+
+// Wire up handlers
+const received: unknown[] = [];
+client.onMessage = (data) => received.push(data);
+
+// Simulate connection lifecycle
+client.connect('ws://test');
+controller.simulateOpen();
+
+// Simulate server messages (auto-wrapped in envelope)
+controller.simulateMessage({ event: 'playerJoined', playerId: '42' });
+
+// Assert what the client sent (auto-unwrapped from envelope)
+client.send({ action: 'join', roomId: '123' });
+expect(controller.sentMessages[0]).toMatchObject({ action: 'join' });
+
+// Simulate error / close
+controller.simulateError('timeout');
+controller.simulateClose(1006);
+```
+
+For lower-level BaseWSClient testing, use `createMockWSPair()` directly.
+
 ## Key Rules (Do's and Don'ts)
 
 ### MUST Do

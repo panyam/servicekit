@@ -77,5 +77,8 @@ export {
 
 // Clients
 export { BaseWSClient } from './base-client';
-export { GRPCWSClient } from './grpcws-client';
+export { GRPCWSClient, MockController } from './grpcws-client';
 export { TypedGRPCWSClient } from './typed-client';
+
+// Test utilities
+export { createMockWSPair, MockWSController } from './mock';

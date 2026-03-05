@@ -288,6 +288,9 @@ class GRPCWSClient {
   // State
   readonly isConnected: boolean
   readonly readyState: number
+
+  // Testing
+  static createMock(): { client: GRPCWSClient; controller: MockController }
 }
 ```
 
@@ -302,6 +305,60 @@ class TypedGRPCWSClient<TIn, TOut> {
   onMessage: (data: TOut) => void
   // ... other methods same as GRPCWSClient
 }
+```
+
+## Testing
+
+### Mock GRPCWSClient
+
+Use `GRPCWSClient.createMock()` to test code that uses `GRPCWSClient` without real WebSocket connections. The controller auto-wraps/unwraps the envelope protocol so tests only deal with application-level data.
+
+```typescript
+import { GRPCWSClient } from '@panyam/servicekit-client';
+
+const { client, controller } = GRPCWSClient.createMock();
+
+// Wire up callbacks as normal
+const received: unknown[] = [];
+client.onMessage = (data) => received.push(data);
+client.onClose = () => { /* handle */ };
+
+// Connect and simulate server behavior
+client.connect('ws://test');
+controller.simulateOpen();
+
+// Simulate server sending a message
+controller.simulateMessage({ event: { case: 'roomJoined', value: { roomId: '123' } } });
+expect(received).toHaveLength(1);
+
+// Inspect what the client sent (already unwrapped from envelope)
+client.send({ action: { case: 'join' } });
+expect(controller.sentMessages[0]).toMatchObject({ action: { case: 'join' } });
+
+// Simulate errors and close
+controller.simulateError('connection failed');
+controller.simulateClose(1006);
+```
+
+### Mock BaseWSClient
+
+For testing code that uses `BaseWSClient` directly, use the lower-level `createMockWSPair()`:
+
+```typescript
+import { BaseWSClient, createMockWSPair } from '@panyam/servicekit-client';
+
+const { WebSocket, controller } = createMockWSPair();
+const client = new BaseWSClient({ WebSocket });
+
+client.onMessage = (data) => console.log('Received:', data);
+client.connect('ws://test');
+controller.simulateOpen();
+
+// Send raw messages (no envelope wrapping)
+controller.simulateRawMessage('{"hello":"world"}');
+
+// Check what was sent
+console.log(controller.sentRaw);
 ```
 
 ## Protocol Details
