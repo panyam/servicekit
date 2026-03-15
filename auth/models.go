@@ -57,33 +57,6 @@ func (id *Identity) Key() string {
 	return fmt.Sprintf("%s:%s", id.IdentityType, id.IdentityKey)
 }
 
-type AuthFlow struct {
-	dal.BaseEntity
-
-	// A unique Auth Session ID
-	ID string
-
-	// Kind of login being done
-	Provider string
-
-	// When this Auth session expires;
-	ExpiresIn time.Time // 300
-
-	// Call back URL for where the session needs to endup on success
-	// callback: CallbackRequest;
-
-	// Handler that will continue the flow after a successful AuthFlow.
-	HandlerName string // "login"
-
-	// Parameters for the handler to continue with.
-	HandlerParams dal.JsonField `gorm:"type:text"`
-}
-
-// And others things here
-func (af *AuthFlow) HasKey() bool {
-	return strings.Trim(af.ID, " ") != ""
-}
-
 /**
  * Channel's represented federated verification objects.  For example a Google
  * Signin would ensure that the user that goes through this flow will end up

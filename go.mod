@@ -3,7 +3,6 @@ module github.com/panyam/servicekit
 go 1.25.0
 
 require (
-	github.com/fernet/fernet-go v0.0.0-20211208181803-9f70042a33ee
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/panyam/gocurrent v0.0.10

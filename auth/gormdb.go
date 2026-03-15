@@ -16,7 +16,7 @@ type AuthDB struct {
 func NewAuthDB(gormdb *gorm.DB) *AuthDB {
 	gormdb.AutoMigrate(&Channel{})
 	gormdb.AutoMigrate(&Identity{})
-	gormdb.AutoMigrate(&AuthFlow{})
+
 	return &AuthDB{storage: gormdb}
 }
 
@@ -56,37 +56,6 @@ func (adb *AuthDB) EnsureChannel(provider string, loginId string, params utils.S
 		log.Println("Error saving channel: ", err)
 	}
 	return channel, newCreated
-}
-
-func (adb *AuthDB) GetAuthFlowById(entityId string) (*AuthFlow, error) {
-	var out AuthFlow
-	err := adb.storage.First(&out, "id = ?", entityId).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		} else {
-			return nil, err
-		}
-	}
-	return &out, nil
-}
-
-func (adb *AuthDB) DeleteAuthFlowById(entityId string) bool {
-	return false
-}
-
-/**
- * Creates a new auth session object to track a login request.
- */
-func (adb *AuthDB) SaveAuthFlow(entity *AuthFlow) (err error) {
-	entity.UpdatedAt = time.Now()
-	result := adb.storage.Save(entity)
-	err = result.Error
-	if result.Error == nil && result.RowsAffected == 0 {
-		entity.CreatedAt = time.Now()
-		err = adb.storage.Create(entity).Error
-	}
-	return
 }
 
 func (adb *AuthDB) GetIdentity(idType string, idKey string) (*Identity, error) {
