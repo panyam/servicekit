@@ -23,10 +23,14 @@
 - [ ] Add benchmarks comparing codec implementations
 
 ### Features
-- [ ] Add connection pooling/limiting middleware
+- [x] Add connection pooling/limiting middleware (`middleware/` package)
 - [ ] Add metrics export (Prometheus)
 - [ ] Add OpenTelemetry tracing support
 - [ ] Consider grpc-gateway integration for hybrid deployments
+
+### Middleware
+- [ ] Add middleware integration tests with real WebSocket connections
+- [ ] Add middleware benchmarks
 
 ### Documentation
 - [ ] Add migration guide for existing JSONConn users

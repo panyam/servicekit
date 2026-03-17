@@ -48,6 +48,8 @@ servicekit/
 │   ├── client_stream.go    # Client streaming support
 │   └── bidi_stream.go      # Bidirectional streaming
 │
+├── middleware/               # HTTP middleware (Guard, rate limit, CORS, etc.)
+│
 ├── auth/                    # Authentication utilities
 │   └── flask/              # Flask session compatibility
 │
@@ -138,6 +140,31 @@ Browser → WebSocket → grpcws Handler → gRPC Stream → gRPC Server
 - `ServerStream[Resp]` - `Recv() (Resp, error)`
 - `ClientStream[Req, Resp]` - `Send(Req)`, `CloseAndRecv()`
 - `BidiStream[Req, Resp]` - `Send(Req)`, `Recv()`, `CloseSend()`
+
+### Middleware Package
+
+The `middleware` package provides composable HTTP middleware with no application-specific imports.
+
+**Key design decisions:**
+
+1. **Instance-based `ClientIPExtractor`**: Replaces the package-global `trustedProxyCIDRs` pattern with an instance that holds its own CIDR list. A package-level `ClientIP(r)` convenience function uses a default extractor for backwards compatibility. This eliminates concurrency hazards when multiple listeners need different trust configs.
+
+2. **Generalized `RateLimiter` with `KeyFunc`**: The `Middleware(keyFunc)` method accepts a `func(*http.Request) string` that extracts the rate limit key. `nil` defaults to `ClientIP`. This generalizes per-IP limiting to per-anything (per-user, per-tenant, per-API-key).
+
+3. **`Guard` as middleware chain**: `Use(mw...)` adds middleware functions; `Wrap(h)` applies them. The first `Use`'d middleware is outermost. Nil middleware are silently skipped. Applications compose their own chain order.
+
+```
+servicekit/middleware/
+├── clientip.go       # ClientIPExtractor (instance-based)
+├── ratelimit.go      # RateLimiter (global + per-key, KeyFunc)
+├── connlimit.go      # ConnLimiter (atomic counter)
+├── origin.go         # OriginChecker (WebSocket origin allowlist)
+├── cors.go           # CORS (origin-aware, reuses OriginChecker)
+├── logging.go        # RequestLogger (slog structured logging)
+├── recovery.go       # Recovery (panic → 500 + stack trace)
+├── guard.go          # Guard (composable middleware chain)
+└── doc.go            # Package godoc
+```
 
 ## Message Flow
 

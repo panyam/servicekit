@@ -110,6 +110,21 @@ func (h *MyHandler) Validate(w http.ResponseWriter, r *http.Request) (*MyConn, b
 router.HandleFunc("/ws", gohttp.WSServe(&MyHandler{}, config))
 ```
 
+## Middleware Package (`middleware/`)
+
+Production-grade HTTP/WebSocket middleware components lifted from massrelay. All middleware is nil-safe (disabled when nil) and has zero app-specific imports.
+
+| Middleware | Purpose |
+|------------|---------|
+| **ClientIPExtractor** | Instance-based trusted proxy extraction (`X-Forwarded-For` / `X-Real-IP`) with configurable CIDR list |
+| **RateLimiter** | Token-bucket rate limiting with global + per-key support and configurable `KeyFunc` |
+| **ConnLimiter** | Concurrent connection limiting via atomic counter (503 when full) |
+| **OriginChecker** | WebSocket origin allowlist (exact, wildcard subdomain, localhost) |
+| **CORS** | Origin-aware CORS headers, reuses `OriginChecker` for consistency |
+| **Recovery** | Panic recovery with structured logging and 500 response |
+| **RequestLogger** | Structured HTTP request logging via `slog` |
+| **Guard** | Composable middleware chain (`Use(mw...)` + `Wrap(h)`) |
+
 ## Files Overview
 
 | File | Purpose |
@@ -118,5 +133,6 @@ router.HandleFunc("/ws", gohttp.WSServe(&MyHandler{}, config))
 | `http/baseconn.go` | Generic BaseConn[I, O], OutgoingMessage union type |
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
+| `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |
 | `cmd/grpcws-demo/` | Multiplayer game demo with GameHub |
