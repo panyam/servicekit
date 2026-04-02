@@ -13,6 +13,9 @@ ServiceKit provides production-grade WebSocket infrastructure for Go application
 | Real-time WebSocket server | `http.BaseConn` + `http.WSServe` |
 | gRPC streaming from browsers | `grpcws` package |
 | TypeScript WebSocket client | `@panyam/servicekit-client` |
+| HTTP middleware (rate limit, CORS, etc.) | `middleware` package |
+| Health/readiness endpoint | `middleware.NewHealthCheck()` |
+| Server timeout defaults | `middleware.ApplyDefaults(srv)` |
 
 ## Quick Start (Read First)
 
@@ -296,6 +299,7 @@ func (c *MyConn) HandleMessage(msg any) error {
 | Working multiplayer example | `cmd/grpcws-demo/main.go` |
 | gRPC-WS details | `grpcws/README.md` |
 | TypeScript client | `clients/typescript/README.md` |
+| Middleware (rate limit, CORS, health, etc.) | `middleware/doc.go` |
 | All codec types | `http/codec.go` |
 | BaseConn implementation | `http/baseconn.go` |
 | Stream handlers | `grpcws/server_stream.go`, `grpcws/client_stream.go`, `grpcws/bidi_stream.go` |

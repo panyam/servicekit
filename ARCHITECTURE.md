@@ -153,17 +153,27 @@ The `middleware` package provides composable HTTP middleware with no application
 
 3. **`Guard` as middleware chain**: `Use(mw...)` adds middleware functions; `Wrap(h)` applies them. The first `Use`'d middleware is outermost. Nil middleware are silently skipped. Applications compose their own chain order.
 
+4. **`RequestID` injects into context**: The `RequestID` middleware stores the ID in the request context. `RequestLogger` automatically includes `request_id` in log output when present, so placing `RequestID` before `RequestLogger` in the Guard chain gives correlated logs for free.
+
+5. **`HealthCheck` is an `http.Handler`, not middleware**: It gets mounted directly on a mux (`mux.Handle(hc.Path(), hc)`), not chained via Guard. This avoids health probes triggering auth, rate limiting, or logging.
+
+6. **`ApplyDefaults` is a helper function, not middleware**: It mutates zero-valued timeout fields on `*http.Server`. SSE/streaming callers must set `WriteTimeout = 0` separately.
+
 ```
 servicekit/middleware/
-├── clientip.go       # ClientIPExtractor (instance-based)
-├── ratelimit.go      # RateLimiter (global + per-key, KeyFunc)
-├── connlimit.go      # ConnLimiter (atomic counter)
-├── origin.go         # OriginChecker (WebSocket origin allowlist)
-├── cors.go           # CORS (origin-aware, reuses OriginChecker)
-├── logging.go        # RequestLogger (slog structured logging)
-├── recovery.go       # Recovery (panic → 500 + stack trace)
-├── guard.go          # Guard (composable middleware chain)
-└── doc.go            # Package godoc
+├── clientip.go        # ClientIPExtractor (instance-based)
+├── ratelimit.go       # RateLimiter (global + per-key, KeyFunc)
+├── connlimit.go       # ConnLimiter (atomic counter)
+├── bodylimit.go       # BodyLimiter (request body size via MaxBytesReader)
+├── origin.go          # OriginChecker (WebSocket origin allowlist)
+├── cors.go            # CORS (origin-aware, reuses OriginChecker)
+├── requestid.go       # RequestID (X-Request-Id generation/propagation)
+├── logging.go         # RequestLogger (slog structured logging, includes request ID)
+├── recovery.go        # Recovery (panic → 500 + stack trace)
+├── health.go          # HealthCheck (health/readiness endpoint handler)
+├── servertimeouts.go  # ApplyDefaults (http.Server timeout defaults)
+├── guard.go           # Guard (composable middleware chain)
+└── doc.go             # Package godoc
 ```
 
 ## Message Flow

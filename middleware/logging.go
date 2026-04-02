@@ -18,7 +18,9 @@ func (r *statusRecorder) WriteHeader(code int) {
 }
 
 // RequestLogger logs HTTP requests with method, path, status, duration, and client IP.
-// Skips logging for specified paths (e.g. /health for noisy liveness probes).
+// When a request ID is present in the context (set by the RequestID middleware),
+// it is automatically included in the log output as "request_id".
+// Skips logging for specified paths (e.g. /healthz for noisy liveness probes).
 func RequestLogger(skipPaths ...string) func(http.Handler) http.Handler {
 	skip := make(map[string]bool, len(skipPaths))
 	for _, p := range skipPaths {
@@ -37,9 +39,15 @@ func RequestLogger(skipPaths ...string) func(http.Handler) http.Handler {
 			next.ServeHTTP(rec, r)
 			duration := time.Since(start)
 
-			slog.Info("HTTP request", "component", "http",
+			attrs := []any{
+				"component", "http",
 				"method", r.Method, "path", r.URL.Path, "status", rec.status,
-				"duration", duration.Round(time.Millisecond).String(), "ip", ClientIP(r))
+				"duration", duration.Round(time.Millisecond).String(), "ip", ClientIP(r),
+			}
+			if rid := RequestIDFromContext(r.Context()); rid != "" {
+				attrs = append(attrs, "request_id", rid)
+			}
+			slog.Info("HTTP request", attrs...)
 		})
 	}
 }

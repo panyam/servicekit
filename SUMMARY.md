@@ -122,8 +122,17 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | **OriginChecker** | WebSocket origin allowlist (exact, wildcard subdomain, localhost) |
 | **CORS** | Origin-aware CORS headers, reuses `OriginChecker` for consistency |
 | **Recovery** | Panic recovery with structured logging and 500 response |
-| **RequestLogger** | Structured HTTP request logging via `slog` |
+| **RequestLogger** | Structured HTTP request logging via `slog` (includes request ID when available) |
+| **RequestID** | X-Request-Id generation, propagation, and context injection |
+| **BodyLimiter** | Request body size limiting via `http.MaxBytesReader` (413 on exceed) |
+| **HealthCheck** | Health/readiness endpoint handler (`http.Handler`, not middleware) |
 | **Guard** | Composable middleware chain (`Use(mw...)` + `Wrap(h)`) |
+
+**Helpers:**
+
+| Helper | Purpose |
+|--------|---------|
+| **ApplyDefaults** | Sets sensible `http.Server` timeout defaults (only overwrites zero-valued fields) |
 
 ## Files Overview
 

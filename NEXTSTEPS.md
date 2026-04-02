@@ -29,6 +29,12 @@
 - [ ] Consider grpc-gateway integration for hybrid deployments
 
 ### Middleware
+- [x] Add BodyLimiter middleware (issue #2)
+- [x] Add HealthCheck handler (issue #3)
+- [x] Add RequestID middleware (issue #4)
+- [x] Add ServerTimeouts helper (issue #5)
+- [x] Add Makefile and pre-push git hook for test automation
+- [x] Enhance RequestLogger to include request ID from context
 - [ ] Add middleware integration tests with real WebSocket connections
 - [ ] Add middleware benchmarks
 

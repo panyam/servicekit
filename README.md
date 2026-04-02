@@ -65,9 +65,10 @@ The Codec interface decouples message encoding from transport, allowing you to u
 type Codec[I any, O any] interface {
     Decode(data []byte, msgType MessageType) (I, error)
     Encode(msg O) ([]byte, MessageType, error)
-    EncodePing(pingId int64, connId string, name string) ([]byte, MessageType, error)
 }
 ```
+
+> **Note:** Ping/pong messages are handled at the transport layer (always JSON), not by the Codec. This separation ensures control messages work consistently even with binary codecs.
 
 #### Built-in Codecs
 
@@ -85,12 +86,14 @@ The generic `BaseConn[I, O]` is the foundation for all WebSocket connections:
 ```go
 type BaseConn[I any, O any] struct {
     Codec     Codec[I, O]
-    Writer    *conc.Writer[conc.Message[O]]
+    Writer    *conc.Writer[OutgoingMessage[O]]
     NameStr   string
     ConnIdStr string
     PingId    int64
 }
 ```
+
+All writes go through `OutgoingMessage[O]`, a union type that handles data messages (via codec), ping messages, and error messages (always JSON) through a single serialized writer, preventing concurrent write panics.
 
 For simple JSON use cases, `JSONConn` is an alias for `BaseConn[any, any]`:
 
@@ -120,7 +123,7 @@ type EchoConn struct {
 func (e *EchoConn) HandleMessage(msg any) error {
     log.Printf("Received: %v", msg)
     // Echo the message back
-    e.Writer.Send(conc.Message[any]{Value: msg})
+    e.Writer.Send(gohttp.OutgoingMessage[any]{Data: &msg})
     return nil
 }
 
@@ -203,7 +206,7 @@ func (g *GameConn) OnStart(conn *websocket.Conn) error {
         Timestamp: time.Now().Unix(),
     }
     
-    g.Writer.Send(conc.Message[any]{Value: welcome})
+    g.Writer.Send(gohttp.OutgoingMessage[any]{Data: &welcome})
     return nil
 }
 ```
@@ -287,7 +290,7 @@ func (s *ChatServer) broadcast(messageType string, data any, excludeId string) {
     
     for id, client := range s.clients {
         if id != excludeId {
-            client.Writer.Send(conc.Message[any]{Value: message})
+            client.Writer.Send(gohttp.OutgoingMessage[any]{Data: &message})
         }
     }
 }
@@ -313,7 +316,7 @@ func (c *CustomConn) SendPing() error {
         "connId":    c.ConnId(),
     }
     
-    c.Writer.Send(conc.Message[any]{Value: pingMsg})
+    c.Writer.Send(gohttp.OutgoingMessage[any]{Data: &pingMsg})
     return nil
 }
 
@@ -337,7 +340,7 @@ func (c *CustomConn) HandleMessage(msg any) error {
             "pingId":    msgMap["pingId"],
             "timestamp": time.Now().Unix(),
         }
-        c.Writer.Send(conc.Message[any]{Value: pongMsg})
+        c.Writer.Send(gohttp.OutgoingMessage[any]{Data: &pongMsg})
         return nil
     default:
         // Handle other message types
@@ -640,7 +643,7 @@ func (r *ResilientConn) OnTimeout() bool {
     log.Printf("Connection timeout for %s", r.ConnId())
     
     // Try to send a final message before closing
-    r.Writer.Send(conc.Message[any]{Value: map[string]any{
+    r.Writer.Send(gohttp.OutgoingMessage[any]{Data: &map[string]any{
         "type": "timeout_warning",
         "message": "Connection will be closed due to inactivity",
     }})
@@ -691,7 +694,7 @@ func (cm *ConnectionManager) BroadcastToRoom(roomId string, message any) {
     
     for _, conn := range cm.connections {
         if conn.roomId == roomId {
-            conn.Writer.Send(conc.Message[any]{Value: message})
+            conn.Writer.Send(gohttp.OutgoingMessage[any]{Data: &message})
         }
     }
 }
@@ -795,6 +798,53 @@ All gRPC-WS messages use a JSON envelope:
 go run ./cmd/grpcws-demo
 
 # Open http://localhost:8080 in browser to test all streaming patterns
+```
+
+## Middleware Package (`middleware/`)
+
+Production-grade HTTP/WebSocket middleware with zero app-specific imports. All components are nil-safe.
+
+| Middleware | Purpose |
+|------------|---------|
+| **ClientIPExtractor** | Trusted proxy IP extraction (`X-Forwarded-For` / `X-Real-IP`) |
+| **RateLimiter** | Token-bucket rate limiting (global + per-key with `KeyFunc`) |
+| **ConnLimiter** | Concurrent connection limiting (503 when full) |
+| **BodyLimiter** | Request body size limiting via `http.MaxBytesReader` (413 on exceed) |
+| **OriginChecker** | WebSocket origin allowlist |
+| **CORS** | Origin-aware CORS headers |
+| **RequestID** | `X-Request-Id` generation/propagation + context injection |
+| **RequestLogger** | Structured HTTP request logging (includes request ID when available) |
+| **Recovery** | Panic recovery with structured logging |
+| **HealthCheck** | Health/readiness endpoint (`http.Handler`) |
+| **Guard** | Composable middleware chain |
+| **ApplyDefaults** | `http.Server` timeout defaults (helper function) |
+
+### Quick Start
+
+```go
+import "github.com/panyam/servicekit/middleware"
+
+// Compose middleware chain
+guard := &middleware.Guard{}
+guard.Use(
+    middleware.NewRequestID().Middleware,
+    middleware.RequestLogger("/healthz"),
+    middleware.CORS(middleware.NewOriginChecker([]string{"*.example.com"})),
+    middleware.NewBodyLimiter(1 << 20).Middleware, // 1MB
+    middleware.NewRateLimiter(middleware.RateLimitConfig{PerKeyPerSec: 10}).Middleware(nil),
+    middleware.NewConnLimiter(1000).Middleware,
+    middleware.Recovery,
+)
+
+// Mount health check directly (bypasses Guard)
+mux.Handle(middleware.NewHealthCheck().Path(), middleware.NewHealthCheck())
+
+// Apply Guard to your routes
+mux.Handle("/api/", guard.Wrap(apiHandler))
+
+// Apply server timeout defaults
+srv := &http.Server{Addr: ":8080", Handler: mux}
+middleware.ApplyDefaults(srv)
 ```
 
 ## Testing
