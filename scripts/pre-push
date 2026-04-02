@@ -2,3 +2,5 @@
 set -e
 echo "Running tests before push..."
 make test
+echo "Running tests with race detector..."
+make test-race

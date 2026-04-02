@@ -1,7 +1,12 @@
-.PHONY: test vet install-hooks
+.PHONY: test test-race vet install-hooks
 
 test:
 	go test ./...
+
+# Run tests with race detector.
+# Note: TestWebSocketReaderRace may fail until gocurrent fixes Reader.closedChan race (#4).
+test-race:
+	go test -race -count=1 -timeout 120s ./...
 
 vet:
 	go vet ./...
