@@ -24,6 +24,7 @@
 
 ### Features
 - [x] Add connection pooling/limiting middleware (`middleware/` package)
+- [x] Add SSE connection type: SSEConn[O], SSEHub[O] (issue #6)
 - [ ] Add metrics export (Prometheus)
 - [ ] Add OpenTelemetry tracing support
 - [ ] Consider grpc-gateway integration for hybrid deployments

@@ -2,7 +2,7 @@
 
 ## Overview
 
-ServiceKit is a Go library providing production-grade WebSocket infrastructure for real-time applications. It builds on top of the Gorilla WebSocket library with abstractions for concurrent message handling, connection lifecycle management, and gRPC streaming integration.
+ServiceKit is a Go library providing production-grade WebSocket and SSE (Server-Sent Events) infrastructure for real-time applications. It builds on top of the Gorilla WebSocket library with abstractions for concurrent message handling, connection lifecycle management, gRPC streaming integration, and server-push via SSE.
 
 ## Core Design Principles
 
@@ -35,11 +35,13 @@ OnStart(conn) → HandleMessage(msg) → OnClose()
 
 ```
 servicekit/
-├── http/                    # Core WebSocket infrastructure
+├── http/                    # Core WebSocket + SSE infrastructure
 │   ├── codec.go            # Codec interface + implementations
 │   ├── baseconn.go         # Generic BaseConn[I, O]
 │   ├── ws.go               # WebSocket serving, WSConn interface
 │   ├── bidir.go            # BiDirStreamConn interface
+│   ├── sseconn.go          # SSEConn[O], BaseSSEConn[O], SSEServe
+│   ├── ssehub.go           # SSEHub[O] session manager
 │   └── utils.go            # HTTP/WS utilities
 │
 ├── grpcws/                  # gRPC-over-WebSocket
@@ -59,6 +61,39 @@ servicekit/
 ```
 
 ## Key Components
+
+### SSE (Server-Sent Events)
+
+The `http` package provides SSE support via `SSEConn[O]` and `SSEHub[O]`, mirroring the WebSocket patterns:
+
+**SSEConn[O]** — Write-only counterpart to BaseConn[I, O]:
+```
+HTTP Request → SSEHandler.Validate() → SSEConn created
+    → Set SSE headers (text/event-stream, no-cache)
+    → OnStart(w, r) → [keepalive/sends...] → client disconnect → OnClose()
+```
+
+- Uses `conc.Writer[SSEOutgoingMessage[O]]` for thread-safe writes (same pattern as BaseConn)
+- Uses `Codec.Encode` for serializing typed output to SSE data fields
+- Keepalive via SSE comments (`: keepalive\n\n`) at configurable interval
+- Context-aware: tied to `r.Context()`, cleans up on client disconnect
+- Per WHATWG SSE spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
+
+**SSEHub[O]** — Session manager for SSE connections:
+- Instance-based (not global) for testability
+- Register/Unregister connections by ConnId
+- Send (targeted) and Broadcast (all) with optional event types
+- CloseAll for graceful shutdown
+
+| BaseConn[I, O] (WebSocket) | BaseSSEConn[O] (SSE) |
+|---|---|
+| Read + Write | Write only |
+| WebSocket ping/pong frames | `: keepalive` SSE comments |
+| `conc.Writer[OutgoingMessage[O]]` | `conc.Writer[SSEOutgoingMessage[O]]` |
+| `OnStart(*websocket.Conn)` | `OnStart(ResponseWriter, *Request)` |
+| `WSServe()` handler factory | `SSEServe()` handler factory |
+
+**Important:** SSE endpoints require `http.Server.WriteTimeout = 0` to prevent the server from closing long-lived connections. See `middleware.ApplyDefaults` documentation.
 
 ### Transport/Codec Separation
 
@@ -201,10 +236,17 @@ servicekit/middleware/
 
 ## Concurrency Model
 
+**WebSocket:**
 - **Reader**: Single goroutine reads from WebSocket
 - **Writer**: `conc.Writer` handles concurrent sends safely
 - **gRPC forwarding**: Separate goroutine for stream responses
 - **Ping timer**: Background timer for heartbeats
+
+**SSE:**
+- **Writer**: `conc.Writer` handles concurrent sends (same as WebSocket)
+- **Keepalive ticker**: Background timer sends SSE comments
+- **No reader**: SSE is unidirectional (server → client)
+- **Context**: `r.Context().Done()` detects client disconnect
 
 ## Configuration
 
@@ -225,6 +267,8 @@ type BiDirStreamConfig struct {
 ## Extension Points
 
 1. **Custom Codec**: Implement `Codec[I, O]` for new serialization formats
-2. **Custom Connection**: Embed `BaseConn` and override lifecycle methods
-3. **Custom Handler**: Implement `WSHandler` for request validation/auth
-4. **Stream Wrappers**: Implement stream interfaces for custom gRPC patterns
+2. **Custom WS Connection**: Embed `BaseConn` and override lifecycle methods
+3. **Custom SSE Connection**: Embed `BaseSSEConn` and override `OnStart`/`OnClose`
+4. **Custom Handler**: Implement `WSHandler` or `SSEHandler` for request validation/auth
+5. **SSE Hub**: Use `SSEHub[O]` for session management, or build custom on top of `BaseSSEConn`
+6. **Stream Wrappers**: Implement stream interfaces for custom gRPC patterns

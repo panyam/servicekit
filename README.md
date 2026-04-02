@@ -1,10 +1,10 @@
-# ServiceKit WebSocket Tutorial
+# ServiceKit
 
-A comprehensive guide to using the servicekit WebSocket package for production-grade real-time applications.
+A comprehensive guide to using servicekit for production-grade real-time applications.
 
 ## Overview
 
-The servicekit WebSocket package provides a robust, production-ready framework for handling WebSocket connections with automatic connection management, ping-pong heartbeats, and lifecycle hooks. It's built on top of the Gorilla WebSocket library with additional abstractions for concurrent message handling.
+ServiceKit provides a robust, production-ready framework for WebSocket connections and Server-Sent Events (SSE) with automatic connection management, heartbeats, and lifecycle hooks. It's built on top of the Gorilla WebSocket library with additional abstractions for concurrent message handling, and includes SSE support for server-push scenarios.
 
 ## Key Features
 
@@ -15,6 +15,7 @@ The servicekit WebSocket package provides a robust, production-ready framework f
 - **Type-safe message handling** with generics
 - **Pluggable Codec system** for flexible message encoding (JSON, Protobuf, custom)
 - **Generic BaseConn[I, O]** for type-safe input/output message handling
+- **Server-Sent Events (SSE)** via `SSEConn[O]` and `SSEHub[O]` for server-push scenarios
 - **gRPC-over-WebSocket support** via the `grpcws` package for all streaming modes
 - **Configurable timeouts and intervals** for different deployment scenarios
 
@@ -706,6 +707,66 @@ func (cm *ConnectionManager) GetStats() map[string]any {
     }
 }
 ```
+
+## Server-Sent Events (SSE)
+
+The `http` package provides `SSEConn[O]` and `SSEHub[O]` for server-sent events — the write-only counterpart to WebSocket connections. SSE is ideal for server-push scenarios (notifications, live updates, streaming responses).
+
+### Basic SSE Endpoint
+
+```go
+import gohttp "github.com/panyam/servicekit/http"
+
+// Define your handler
+type MySSEHandler struct{}
+
+func (h *MySSEHandler) Validate(w http.ResponseWriter, r *http.Request) (*gohttp.BaseSSEConn[any], bool) {
+    return &gohttp.BaseSSEConn[any]{
+        Codec:   &gohttp.JSONCodec{},
+        NameStr: "MySSE",
+    }, true
+}
+
+// Mount the endpoint
+router.HandleFunc("/events", gohttp.SSEServe[any](&MySSEHandler{}, nil))
+```
+
+### Sending Events
+
+```go
+// Plain data event (SSE type defaults to "message")
+conn.SendOutput(map[string]any{"status": "updated"})
+
+// Named event (clients use addEventListener("alert", ...))
+conn.SendEvent("alert", map[string]any{"level": "warning"})
+
+// Named event with ID (enables reconnection via Last-Event-ID)
+conn.SendEventWithID("update", "42", map[string]any{"version": 3})
+```
+
+### Session Management with SSEHub
+
+```go
+hub := gohttp.NewSSEHub[any]()
+
+// Register/unregister in lifecycle hooks
+hub.Register(conn)
+hub.Unregister(conn.ConnId())
+
+// Targeted and broadcast delivery
+hub.Send(sessionId, msg)          // one connection
+hub.Broadcast(msg)                // all connections
+hub.BroadcastEvent("alert", msg)  // all, with event type
+
+// Graceful shutdown
+hub.CloseAll()
+```
+
+### Important Notes
+
+- **Set `WriteTimeout = 0`** on `http.Server` for SSE endpoints (long-lived connections)
+- Keepalive comments (`: keepalive`) are sent automatically at a configurable interval (default 30s) to prevent proxy timeouts
+- SSE follows the [WHATWG Server-Sent Events spec](https://html.spec.whatwg.org/multipage/server-sent-events.html)
 
 ## gRPC-over-WebSocket (`grpcws` Package)
 

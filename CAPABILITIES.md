@@ -1,7 +1,7 @@
 # ServiceKit
 
 ## Version
-0.0.7
+0.0.8
 
 ## Provides
 - websocket-infrastructure: Production-grade WebSocket connection management
@@ -10,6 +10,8 @@
 - grpc-over-websocket: gRPC streaming over WebSocket via grpcws package
 - http-middleware: Guard, RateLimiter, ConnLimiter, BodyLimiter, OriginChecker, CORS, Recovery, RequestLogger, RequestID, HealthCheck
 - server-timeouts: ApplyDefaults helper for sensible http.Server timeout defaults
+- sse-connection: SSEConn[O] for server-sent event connections with keepalive and codec support
+- sse-hub: SSEHub[O] generic session manager for SSE connections with register/broadcast/close
 - connection-lifecycle: OnStart, HandleMessage, OnClose hooks with heartbeat/ping-pong
 - typescript-client: @panyam/servicekit-client npm package for browser WebSocket
 - trusted-proxy: IP extraction with trusted proxy support
@@ -29,7 +31,7 @@ newstack/servicekit/master
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/servicekit 0.0.4
+require github.com/panyam/servicekit 0.0.8
 
 // Local development
 replace github.com/panyam/servicekit => ~/newstack/servicekit/master
@@ -37,7 +39,7 @@ replace github.com/panyam/servicekit => ~/newstack/servicekit/master
 
 ### Key Imports
 ```go
-import "github.com/panyam/servicekit/ws"
+import gohttp "github.com/panyam/servicekit/http"
 ```
 
 ## Status

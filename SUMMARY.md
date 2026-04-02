@@ -2,11 +2,12 @@
 
 ## Purpose
 
-ServiceKit provides production-grade WebSocket infrastructure for Go applications, with special focus on:
+ServiceKit provides production-grade WebSocket and SSE infrastructure for Go applications, with special focus on:
 
 1. **Real-time communication** - Chat, gaming, live updates
 2. **gRPC streaming over WebSocket** - Browser-compatible gRPC streaming
-3. **Connection robustness** - Heartbeats, timeouts, graceful shutdown
+3. **Server-Sent Events (SSE)** - Server-push for notifications, live feeds, streaming responses
+4. **Connection robustness** - Heartbeats, timeouts, graceful shutdown
 
 ## Architecture
 
@@ -34,7 +35,19 @@ Both server and client use a two-layer architecture:
 
 **Key principle**: Control messages (ping/pong/error) are **always JSON** at the transport layer, regardless of what codec is used for data messages. This ensures consistent communication even with binary protocols.
 
-## Recent Changes (2025-12-31)
+## Recent Changes (2026-04-02)
+
+### SSE Connection Support (Issue #6)
+Added `SSEConn[O]` and `SSEHub[O]` for server-sent events:
+- **`BaseSSEConn[O]`**: Write-only counterpart to `BaseConn[I, O]`, uses `conc.Writer` for thread-safe writes
+- **`SSEServe[O, S]`**: HTTP handler factory, mirrors `WSServe` pattern
+- **`SSEHub[O]`**: Session manager with Register/Unregister/Send/Broadcast/CloseAll
+- SSE comment keepalive (`: keepalive\n\n`) at configurable interval
+- Context-aware lifecycle tied to `http.Request.Context()`
+- Uses existing `Codec.Encode` for data serialization
+- Per WHATWG SSE spec: supports `event:`, `data:`, `id:` fields
+
+## Previous Changes (2025-12-31)
 
 ### Transport/Codec Separation
 - Removed ping handling from Codec interface (pings are transport-level)
@@ -141,6 +154,8 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/codec.go` | Codec interface + 4 implementations (data only) |
 | `http/baseconn.go` | Generic BaseConn[I, O], OutgoingMessage union type |
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
+| `http/sseconn.go` | SSEConn[O] interface, BaseSSEConn[O], SSEServe handler factory |
+| `http/ssehub.go` | SSEHub[O] session manager (register/broadcast/close) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
 | `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |

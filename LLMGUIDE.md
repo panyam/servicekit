@@ -4,13 +4,15 @@
 
 ## What This Is (3 sentences)
 
-ServiceKit provides production-grade WebSocket infrastructure for Go applications. It handles connection lifecycle, ping/pong heartbeats, and concurrent writes so you don't have to. The `grpcws` package adds gRPC streaming over WebSocket for browser clients.
+ServiceKit provides production-grade WebSocket and SSE infrastructure for Go applications. It handles connection lifecycle, heartbeats, and concurrent writes so you don't have to. The `grpcws` package adds gRPC streaming over WebSocket for browser clients, and `SSEConn`/`SSEHub` provide server-sent events for server-push scenarios.
 
 ## When to Use
 
 | Need | Use |
 |------|-----|
 | Real-time WebSocket server | `http.BaseConn` + `http.WSServe` |
+| Server-sent events (SSE) | `http.BaseSSEConn` + `http.SSEServe` |
+| SSE session management (broadcast/targeted) | `http.SSEHub` |
 | gRPC streaming from browsers | `grpcws` package |
 | TypeScript WebSocket client | `@panyam/servicekit-client` |
 | HTTP middleware (rate limit, CORS, etc.) | `middleware` package |
@@ -227,14 +229,99 @@ controller.simulateClose(1006);
 
 For lower-level BaseWSClient testing, use `createMockWSPair()` directly.
 
+### Template 6: SSE Endpoint (Server-Sent Events)
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+
+    "github.com/gorilla/mux"
+    gohttp "github.com/panyam/servicekit/http"
+)
+
+// Step 1: Define your SSE connection (embed BaseSSEConn)
+type MySSEConn struct {
+    gohttp.BaseSSEConn[any]  // MUST embed this
+}
+
+// Step 2: Override OnStart if needed (optional)
+func (c *MySSEConn) OnStart(w http.ResponseWriter, r *http.Request) error {
+    if err := c.BaseSSEConn.OnStart(w, r); err != nil {
+        return err
+    }
+    // Start sending events (e.g., from a goroutine)
+    go func() {
+        c.SendOutput(map[string]any{"status": "connected"})
+        c.SendEvent("update", map[string]any{"data": "hello"})
+    }()
+    return nil
+}
+
+// Step 3: Define handler for validation
+type MySSEHandler struct{}
+
+func (h *MySSEHandler) Validate(w http.ResponseWriter, r *http.Request) (*MySSEConn, bool) {
+    return &MySSEConn{
+        BaseSSEConn: gohttp.BaseSSEConn[any]{
+            Codec:   &gohttp.JSONCodec{},
+            NameStr: "MySSEConn",
+        },
+    }, true
+}
+
+// Step 4: Wire it up
+func main() {
+    router := mux.NewRouter()
+    router.HandleFunc("/events", gohttp.SSEServe[any](&MySSEHandler{}, nil))
+    srv := &http.Server{Handler: router, Addr: ":8080"}
+    srv.WriteTimeout = 0  // Required for SSE!
+    log.Fatal(srv.ListenAndServe())
+}
+```
+
+### Template 7: SSE with Hub (Broadcast/Targeted)
+
+```go
+// Create a hub for managing SSE sessions
+hub := gohttp.NewSSEHub[any]()
+
+// In your handler's Validate, register connections:
+func (h *MySSEHandler) Validate(w http.ResponseWriter, r *http.Request) (*MySSEConn, bool) {
+    conn := &MySSEConn{...}
+    hub.Register(&conn.BaseSSEConn)
+    return conn, true
+}
+
+// In your SSE connection's OnClose, unregister:
+func (c *MySSEConn) OnClose() {
+    hub.Unregister(c.ConnId())
+    c.BaseSSEConn.OnClose()
+}
+
+// From anywhere in your application:
+hub.Broadcast(map[string]any{"type": "alert", "msg": "hello all"})
+hub.Send(sessionId, map[string]any{"type": "direct", "msg": "just for you"})
+hub.SendEvent(sessionId, "notification", map[string]any{"alert": true})  // targeted named event
+hub.BroadcastEvent("notification", map[string]any{"alert": true})        // broadcast named event
+
+// On shutdown:
+hub.CloseAll()
+```
+
 ## Key Rules (Do's and Don'ts)
 
 ### MUST Do
 
 ```go
-// 1. ALWAYS embed JSONConn (or BaseConn) for connections
+// 1. ALWAYS embed JSONConn (or BaseConn/BaseSSEConn) for connections
 type MyConn struct {
-    gohttp.JSONConn  // Required
+    gohttp.JSONConn  // Required for WebSocket
+}
+type MySSEConn struct {
+    gohttp.BaseSSEConn[any]  // Required for SSE
 }
 
 // 2. ALWAYS call parent OnStart if you override it
@@ -250,6 +337,9 @@ func (c *MyConn) OnStart(conn *websocket.Conn) error {
 c.SendOutput(msg)  // Correct
 // or
 c.Writer.Send(gohttp.OutgoingMessage[any]{Data: &msg})  // Also correct
+
+// 4. For SSE endpoints, ALWAYS set WriteTimeout = 0
+srv.WriteTimeout = 0  // Required for long-lived SSE connections
 ```
 
 ### NEVER Do
@@ -302,6 +392,8 @@ func (c *MyConn) HandleMessage(msg any) error {
 | Middleware (rate limit, CORS, health, etc.) | `middleware/doc.go` |
 | All codec types | `http/codec.go` |
 | BaseConn implementation | `http/baseconn.go` |
+| SSE connection | `http/sseconn.go` |
+| SSE session hub | `http/ssehub.go` |
 | Stream handlers | `grpcws/server_stream.go`, `grpcws/client_stream.go`, `grpcws/bidi_stream.go` |
 
 ## Message Protocol (gRPC-WS)
@@ -331,12 +423,21 @@ See `cmd/grpcws-demo/main.go` for complete implementation:
 - `PlayerConn` has channels for events/state
 
 ### Lifecycle Hooks Order
+
+**WebSocket:**
 ```
 Validate() → OnStart() → [HandleMessage()...] → OnClose()
                               ↓
                          OnError()
                               ↓
                          OnTimeout()
+```
+
+**SSE (write-only):**
+```
+Validate() → OnStart() → [SendOutput/SendEvent...] → OnClose()
+                              ↓
+                         (keepalive comments sent automatically)
 ```
 
 ## Troubleshooting

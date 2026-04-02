@@ -15,6 +15,8 @@
 //
 // Helpers:
 //   - ApplyDefaults: Sets sensible timeout defaults on http.Server
+//     (note: SSE endpoints require WriteTimeout = 0 separately to prevent
+//     the server from closing long-lived streaming connections)
 //
 // All components are nil-safe: a nil component acts as a no-op passthrough.
 // No application-specific imports — designed for embedding in any Go HTTP server.
