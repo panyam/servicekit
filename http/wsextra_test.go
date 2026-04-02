@@ -13,7 +13,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	conc "github.com/panyam/gocurrent"
 )
 
 // Test message types for comprehensive testing
@@ -44,7 +43,7 @@ func (e *EchoConn) HandleMessage(msg any) error {
 		"connId":       e.ConnId(),
 	}
 
-	e.Writer.Send(conc.Message[any]{Value: response})
+	e.SendOutput(any(response))
 	return nil
 }
 
@@ -92,7 +91,7 @@ func (r *Room) Broadcast(message any, excludeId string) {
 
 	for id, client := range r.clients {
 		if id != excludeId {
-			client.Writer.Send(conc.Message[any]{Value: message})
+			client.SendOutput(any(message))
 		}
 	}
 }
@@ -127,7 +126,7 @@ func (c *ChatConn) OnStart(conn *websocket.Conn) error {
 		"room":     c.roomName,
 		"server":   "ServiceKit Chat Server",
 	}
-	c.Writer.Send(conc.Message[any]{Value: welcome})
+	c.SendOutput(any(welcome))
 
 	return nil
 }
@@ -165,7 +164,7 @@ func (c *ChatConn) HandleMessage(msg any) error {
 			"timestamp": time.Now().Unix(),
 			"pingCount": atomic.LoadInt64(&c.pingCount),
 		}
-		c.Writer.Send(conc.Message[any]{Value: pong})
+		c.SendOutput(any(pong))
 
 	case "pong":
 		// Handle client pong response
@@ -201,7 +200,7 @@ func (c *ChatConn) HandleMessage(msg any) error {
 			"room":  c.roomName,
 			"users": users,
 		}
-		c.Writer.Send(conc.Message[any]{Value: userList})
+		c.SendOutput(any(userList))
 
 	case "server_stats":
 		// Return server statistics
@@ -212,7 +211,7 @@ func (c *ChatConn) HandleMessage(msg any) error {
 			"total_rooms":    len(c.server.rooms),
 			"current_time":   time.Now().Unix(),
 		}
-		c.Writer.Send(conc.Message[any]{Value: stats})
+		c.SendOutput(any(stats))
 
 	default:
 		log.Printf("Unknown message type: %s", msgMap["type"])
@@ -335,7 +334,7 @@ func (a *AuthConn) HandleMessage(msg any) error {
 			"error": "Insufficient permissions",
 			"code":  "PERMISSION_DENIED",
 		}
-		a.Writer.Send(conc.Message[any]{Value: errorMsg})
+		a.SendOutput(any(errorMsg))
 		return nil
 	}
 
@@ -345,7 +344,7 @@ func (a *AuthConn) HandleMessage(msg any) error {
 		"userID":   a.userID,
 		"original": msg,
 	}
-	a.Writer.Send(conc.Message[any]{Value: response})
+	a.SendOutput(any(response))
 
 	return nil
 }
@@ -441,7 +440,7 @@ func (l *LoadTestConn) HandleMessage(msg any) error {
 			"uptime":       time.Since(l.startTime).Seconds(),
 			"data":         msgMap["data"],
 		}
-		l.Writer.Send(conc.Message[any]{Value: response})
+		l.SendOutput(any(response))
 	}
 
 	return nil

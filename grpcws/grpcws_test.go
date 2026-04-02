@@ -172,28 +172,8 @@ func TestGRPCWSCodec_Encode(t *testing.T) {
 	}
 }
 
-func TestGRPCWSCodec_EncodePing(t *testing.T) {
-	codec := &GRPCWSCodec[*timestamppb.Timestamp, *timestamppb.Timestamp]{}
-
-	data, msgType, err := codec.EncodePing(42, "conn-123", "TestConn")
-	if err != nil {
-		t.Fatalf("EncodePing() error = %v", err)
-	}
-	if msgType != gohttp.TextMessage {
-		t.Errorf("EncodePing() msgType = %v, want TextMessage", msgType)
-	}
-
-	var msg ControlMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		t.Fatalf("EncodePing() produced invalid JSON: %v", err)
-	}
-	if msg.Type != TypePing {
-		t.Errorf("EncodePing() Type = %v, want %v", msg.Type, TypePing)
-	}
-	if msg.PingId != 42 {
-		t.Errorf("EncodePing() PingId = %v, want 42", msg.PingId)
-	}
-}
+// TestGRPCWSCodec_EncodePing removed: EncodePing was moved to transport layer
+// (pings are always JSON at the transport level, not codec-specific).
 
 func TestGRPCWSCodec_EncodeData(t *testing.T) {
 	codec := &GRPCWSCodec[*timestamppb.Timestamp, *timestamppb.Timestamp]{}
