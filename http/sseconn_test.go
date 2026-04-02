@@ -418,7 +418,11 @@ func TestSSECodecIntegration(t *testing.T) {
 
 	conn := <-typedHandler.connChan
 	// Wait for OnStart to complete (Writer initialization)
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-conn.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for SSE connection to be ready")
+	}
 
 	conn.SendOutput(StatusUpdate{
 		Service: "api-gateway",

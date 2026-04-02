@@ -157,6 +157,11 @@ type BaseSSEConn[O any] struct {
 	// Auto-generated if not set.
 	ConnIdStr string
 
+	// ready is closed when OnStart completes and the Writer is initialized.
+	// Initialized eagerly via initReady(). Use Ready() to wait.
+	ready     chan struct{}
+	readyOnce sync.Once
+
 	// done is closed when the connection should terminate.
 	// Used by SSEServe to detect programmatic close via Close().
 	done     chan struct{}
@@ -196,6 +201,12 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 
 	log.Printf("Starting %s SSE connection: %s", b.Name(), b.ConnId())
 
+	// Flush headers immediately so the client receives them before any
+	// data events. This must happen before creating the Writer goroutine
+	// to avoid a concurrent write race on the ResponseWriter.
+	flusher.Flush()
+
+	b.initReady()
 	b.done = make(chan struct{})
 	b.Writer = conc.NewWriter(func(msg SSEOutgoingMessage[O]) error {
 		// Handle keepalive comments
@@ -229,7 +240,26 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	})
 
+	close(b.ready)
 	return nil
+}
+
+// initReady ensures the ready channel is created exactly once.
+func (b *BaseSSEConn[O]) initReady() {
+	b.readyOnce.Do(func() {
+		b.ready = make(chan struct{})
+	})
+}
+
+// Ready returns a channel that is closed when OnStart completes and the
+// Writer is initialized. Safe to call before OnStart (the channel is
+// created lazily). Use this to wait before sending messages:
+//
+//	<-conn.Ready()
+//	conn.SendOutput(msg)
+func (b *BaseSSEConn[O]) Ready() <-chan struct{} {
+	b.initReady()
+	return b.ready
 }
 
 // OnClose cleans up the SSE connection by stopping the Writer and closing
@@ -386,12 +416,8 @@ func SSEServe[O any, S SSEConn[O]](handler SSEHandler[O, S], config *SSEConnConf
 		}
 		defer conn.OnClose()
 
-		// Flush headers immediately so the client receives them before
-		// any data events are sent. Without this, http.Get blocks until
-		// the first data write.
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		}
+		// Note: header flush happens inside OnStart, before the Writer
+		// goroutine is created, to avoid concurrent ResponseWriter access.
 
 		// Start keepalive ticker if configured
 		var keepaliveTicker *time.Ticker
