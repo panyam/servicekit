@@ -42,6 +42,8 @@ servicekit/
 │   ├── bidir.go            # BiDirStreamConn interface
 │   ├── sseconn.go          # SSEConn[O], BaseSSEConn[O], SSEServe
 │   ├── ssehub.go           # SSEHub[O] session manager
+│   ├── graceful.go         # ListenAndServeGraceful shutdown helper
+│   ├── streamable.go       # StreamableServe (POST-that-optionally-streams)
 │   └── utils.go            # HTTP/WS utilities
 │
 ├── grpcws/                  # gRPC-over-WebSocket
@@ -94,6 +96,24 @@ HTTP Request → SSEHandler.Validate() → SSEConn created
 | `WSServe()` handler factory | `SSEServe()` handler factory |
 
 **Important:** SSE endpoints require `http.Server.WriteTimeout = 0` to prevent the server from closing long-lived connections. See `middleware.ApplyDefaults` documentation.
+
+### Graceful Shutdown
+
+`ListenAndServeGraceful` provides signal-aware HTTP server lifecycle management:
+
+```
+Start srv.ListenAndServe() → Block on signal/context
+    → OnShutdown callbacks (SSEHub.CloseAll, etc.)
+    → srv.Shutdown(drainCtx) → Return
+```
+
+Key design: OnShutdown callbacks run BEFORE `srv.Shutdown()` so they can send goodbye events to SSE/WS clients while connections are still open. SSE connections need explicit close (via `hub.CloseAll()`) to unblock `SSEServe` select loops. WS connections drain automatically when `srv.Shutdown()` closes TCP connections.
+
+### Streamable HTTP
+
+`StreamableServe` implements the "POST-that-optionally-streams" pattern from MCP 2025-03-26. A single endpoint returns either `application/json` (SingleResponse) or `text/event-stream` (StreamResponse) based on the handler's decision.
+
+The streaming path is request-scoped (not a long-lived connection like SSEConn), using a channel-based `StreamResponse` for backpressure control. The handler creates a channel, spawns a goroutine to write events, and closes the channel when done.
 
 ### Transport/Codec Separation
 
@@ -271,4 +291,5 @@ type BiDirStreamConfig struct {
 3. **Custom SSE Connection**: Embed `BaseSSEConn` and override `OnStart`/`OnClose`
 4. **Custom Handler**: Implement `WSHandler` or `SSEHandler` for request validation/auth
 5. **SSE Hub**: Use `SSEHub[O]` for session management, or build custom on top of `BaseSSEConn`
-6. **Stream Wrappers**: Implement stream interfaces for custom gRPC patterns
+6. **Streamable Handler**: Use `StreamableServe` for POST-that-optionally-streams endpoints
+7. **Stream Wrappers**: Implement stream interfaces for custom gRPC patterns

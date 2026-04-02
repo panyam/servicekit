@@ -17,6 +17,8 @@ ServiceKit provides production-grade WebSocket and SSE infrastructure for Go app
 | TypeScript WebSocket client | `@panyam/servicekit-client` |
 | HTTP middleware (rate limit, CORS, etc.) | `middleware` package |
 | Health/readiness endpoint | `middleware.NewHealthCheck()` |
+| Graceful shutdown with signal handling | `http.ListenAndServeGraceful` |
+| POST-that-optionally-streams (MCP pattern) | `http.StreamableServe` |
 | Server timeout defaults | `middleware.ApplyDefaults(srv)` |
 
 ## Quick Start (Read First)
@@ -311,6 +313,78 @@ hub.BroadcastEvent("notification", map[string]any{"alert": true})        // broa
 hub.CloseAll()
 ```
 
+### Template 8: Graceful Shutdown
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+    "time"
+
+    gohttp "github.com/panyam/servicekit/http"
+    "github.com/panyam/servicekit/middleware"
+)
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        w.Write([]byte("ok"))
+    })
+
+    srv := &http.Server{Addr: ":8080", Handler: mux}
+    middleware.ApplyDefaults(srv)
+    srv.WriteTimeout = 0 // if serving SSE
+
+    hub := gohttp.NewSSEHub[any]()
+
+    // Blocks until SIGTERM/SIGINT, then drains gracefully
+    err := gohttp.ListenAndServeGraceful(srv,
+        gohttp.WithDrainTimeout(10*time.Second),
+        gohttp.WithOnShutdown(hub.CloseAll),  // close SSE connections first
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Template 9: Streamable HTTP (POST-that-optionally-streams)
+
+```go
+package main
+
+import (
+    "context"
+    "net/http"
+
+    "github.com/gorilla/mux"
+    gohttp "github.com/panyam/servicekit/http"
+)
+
+func main() {
+    router := mux.NewRouter()
+    router.HandleFunc("/rpc", gohttp.StreamableServe(
+        func(ctx context.Context, r *http.Request) gohttp.StreamableResponse {
+            // Decide per-request: sync JSON or SSE stream
+            if r.Header.Get("Accept") == "text/event-stream" {
+                ch := make(chan gohttp.SSEEvent)
+                go func() {
+                    defer close(ch)
+                    ch <- gohttp.SSEEvent{Event: "progress", Data: map[string]any{"pct": 50}}
+                    ch <- gohttp.SSEEvent{Event: "result", Data: map[string]any{"done": true}}
+                }()
+                return gohttp.StreamResponse{Events: ch}
+            }
+            return gohttp.SingleResponse{Body: map[string]any{"result": "ok"}}
+        },
+        nil, // default config (JSONCodec)
+    ))
+    http.ListenAndServe(":8080", router)
+}
+```
+
 ## Key Rules (Do's and Don'ts)
 
 ### MUST Do
@@ -394,6 +468,8 @@ func (c *MyConn) HandleMessage(msg any) error {
 | BaseConn implementation | `http/baseconn.go` |
 | SSE connection | `http/sseconn.go` |
 | SSE session hub | `http/ssehub.go` |
+| Graceful shutdown | `http/graceful.go` |
+| Streamable HTTP | `http/streamable.go` |
 | Stream handlers | `grpcws/server_stream.go`, `grpcws/client_stream.go`, `grpcws/bidi_stream.go` |
 
 ## Message Protocol (gRPC-WS)

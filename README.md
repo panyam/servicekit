@@ -16,6 +16,8 @@ ServiceKit provides a robust, production-ready framework for WebSocket connectio
 - **Pluggable Codec system** for flexible message encoding (JSON, Protobuf, custom)
 - **Generic BaseConn[I, O]** for type-safe input/output message handling
 - **Server-Sent Events (SSE)** via `SSEConn[O]` and `SSEHub[O]` for server-push scenarios
+- **Graceful shutdown** via `ListenAndServeGraceful` with signal handling and connection draining
+- **Streamable HTTP** via `StreamableServe` for the POST-that-optionally-streams pattern (MCP 2025-03-26)
 - **gRPC-over-WebSocket support** via the `grpcws` package for all streaming modes
 - **Configurable timeouts and intervals** for different deployment scenarios
 
@@ -860,6 +862,52 @@ go run ./cmd/grpcws-demo
 
 # Open http://localhost:8080 in browser to test all streaming patterns
 ```
+
+## Graceful Shutdown
+
+`ListenAndServeGraceful` handles signal registration, connection draining, and cleanup callbacks for production HTTP servers.
+
+```go
+hub := gohttp.NewSSEHub[any]()
+
+err := gohttp.ListenAndServeGraceful(srv,
+    gohttp.WithDrainTimeout(10*time.Second),
+    gohttp.WithOnShutdown(hub.CloseAll),  // notify SSE clients before drain
+)
+```
+
+**Options:**
+- `WithDrainTimeout(d)` — max time to wait for in-flight requests (default 30s)
+- `WithOnShutdown(fn)` — callbacks invoked before drain (SSEHub.CloseAll, flush logs, etc.)
+- `WithSignals(sigs...)` — OS signals to catch (default SIGTERM, SIGINT)
+- `WithContext(ctx)` — parent context; shutdown on cancellation
+
+OnShutdown callbacks run **before** `srv.Shutdown()` so they can send goodbye events while connections are still open.
+
+## Streamable HTTP
+
+`StreamableServe` implements the "POST-that-optionally-streams" pattern from [MCP 2025-03-26 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http). A single endpoint returns either a JSON response or an SSE event stream.
+
+```go
+router.HandleFunc("/rpc", gohttp.StreamableServe(
+    func(ctx context.Context, r *http.Request) gohttp.StreamableResponse {
+        if wantsStreaming(r) {
+            ch := make(chan gohttp.SSEEvent)
+            go func() {
+                defer close(ch)
+                ch <- gohttp.SSEEvent{Data: result}
+            }()
+            return gohttp.StreamResponse{Events: ch}
+        }
+        return gohttp.SingleResponse{Body: result}
+    },
+    nil,
+))
+```
+
+- **SingleResponse** — `Content-Type: application/json`, custom status codes
+- **StreamResponse** — `Content-Type: text/event-stream`, channel-based for backpressure
+- Request-scoped streams (simpler than SSEConn for one-shot streaming)
 
 ## Middleware Package (`middleware/`)
 

@@ -47,6 +47,18 @@ Added `SSEConn[O]` and `SSEHub[O]` for server-sent events:
 - Uses existing `Codec.Encode` for data serialization
 - Per WHATWG SSE spec: supports `event:`, `data:`, `id:` fields
 
+### Graceful Shutdown (Issue #7)
+- **`ListenAndServeGraceful`**: Signal-aware HTTP server lifecycle with functional options
+- `WithDrainTimeout`, `WithOnShutdown`, `WithSignals`, `WithContext`
+- OnShutdown callbacks run before drain (SSEHub.CloseAll, goodbye messages, etc.)
+- WS connections drain automatically; SSE needs explicit hub close
+
+### Streamable HTTP (Issue #8)
+- **`StreamableServe`**: POST-that-optionally-streams handler factory (MCP 2025-03-26 pattern)
+- Handler returns `SingleResponse` (JSON) or `StreamResponse` (SSE channel)
+- Channel-based streaming for backpressure control
+- Request-scoped streams (not long-lived like SSEConn)
+
 ## Previous Changes (2025-12-31)
 
 ### Transport/Codec Separation
@@ -156,6 +168,8 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
 | `http/sseconn.go` | SSEConn[O] interface, BaseSSEConn[O], SSEServe handler factory |
 | `http/ssehub.go` | SSEHub[O] session manager (register/broadcast/close) |
+| `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
+| `http/streamable.go` | StreamableServe for POST-that-optionally-streams (MCP 2025-03-26) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
 | `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |
