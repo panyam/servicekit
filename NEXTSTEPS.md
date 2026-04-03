@@ -18,7 +18,7 @@
 ### Testing
 - [x] Add `GRPCWSClient.createMock()` test utility (issue #1)
 - [x] Add reusable `MockWebSocket` + `MockWSController` in `mock.ts`
-- [ ] Add integration tests for grpcws with real gRPC server
+- [x] Add integration tests for grpcws over real WebSocket connections (issue #9)
 - [ ] Add load tests for concurrent WebSocket connections
 - [ ] Add benchmarks comparing codec implementations
 
