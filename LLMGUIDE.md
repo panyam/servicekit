@@ -231,6 +231,46 @@ controller.simulateClose(1006);
 
 For lower-level BaseWSClient testing, use `createMockWSPair()` directly.
 
+### Template 5b: TypeScript SSE Client
+
+```typescript
+import { SSEClient, StreamableClient } from '@panyam/servicekit-client';
+
+// SSE long-lived stream (for SSEServe endpoints)
+const sse = new SSEClient<MyEvent>();
+sse.onMessage = (data) => console.log('Data:', data);
+sse.onEvent = (type, data) => console.log('Event:', type, data);
+sse.onClose = () => console.log('Stream ended');
+await sse.connect('http://localhost:8080/events');
+
+// Streamable HTTP (for StreamableServe endpoints)
+const rpc = new StreamableClient<MyReq, MyResp>();
+// Sync path: returns parsed JSON
+const result = await rpc.post('http://localhost:8080/rpc', { method: 'get' });
+// Stream path: events via callbacks
+rpc.onEvent = (type, data) => console.log(type, data);
+rpc.onDone = () => console.log('Done');
+await rpc.post('http://localhost:8080/rpc', { method: 'stream' });
+```
+
+### Template 5c: Testing SSE Client (Mock)
+
+```typescript
+import { SSEClient, createMockSSEPair } from '@panyam/servicekit-client';
+
+const { client, controller } = SSEClient.createMock();
+const received: unknown[] = [];
+client.onMessage = (data) => received.push(data);
+
+await client.connect('http://test/events');
+controller.simulateMessage({ status: 'ok' });
+controller.simulateEvent('update', { version: 3 });
+controller.simulateClose();
+
+expect(received).toHaveLength(1);
+expect(controller.receivedUrl).toBe('http://test/events');
+```
+
 ### Template 6: SSE Endpoint (Server-Sent Events)
 
 ```go

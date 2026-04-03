@@ -1,22 +1,27 @@
 /**
  * @panyam/servicekit-client
  *
- * TypeScript client library for ServiceKit WebSocket protocols.
+ * TypeScript client library for ServiceKit WebSocket and SSE protocols.
  *
  * ## Architecture
  *
  * The client mirrors the server-side architecture with two layers:
- * - **Transport layer**: Handles WebSocket connection, ping/pong heartbeats
+ * - **Transport layer**: Handles WebSocket/SSE connection, ping/pong heartbeats
  * - **Codec layer**: Handles encoding/decoding of data messages
  *
  * Control messages (ping, pong, error) are always JSON at the transport layer,
  * while data messages use the configured codec (JSON, binary protobuf, etc.).
  *
- * ## Clients
+ * ## WebSocket Clients
  *
  * - `BaseWSClient`: Low-level WebSocket with auto ping/pong (for http/JSONConn)
  * - `GRPCWSClient`: gRPC-style streaming with envelope protocol (for grpcws)
  * - `TypedGRPCWSClient`: Type-safe wrapper for GRPCWSClient
+ *
+ * ## SSE Clients
+ *
+ * - `SSEClient`: Server-Sent Events client (for http/SSEServe endpoints)
+ * - `StreamableClient`: POST-that-optionally-streams (for http/StreamableServe)
  *
  * ## Codecs
  *
@@ -63,5 +68,9 @@ export { MessageType, ControlMessage, ReadyState, ReadyStateType, ClientOptions,
 export { BaseWSClient } from './base-client';
 export { GRPCWSClient, MockController } from './grpcws-client';
 export { TypedGRPCWSClient } from './typed-client';
+export { SSEClient, SSEClientOptions } from './sse-client';
+export { StreamableClient, StreamableClientOptions } from './streamable-client';
+export { createParser, EventSourceMessage, EventSourceParser, ParserCallbacks, ParseError, } from './sse-parser';
 export { createMockWSPair, MockWSController } from './mock';
+export { createMockSSEPair, MockSSEController } from './sse-mock';
 //# sourceMappingURL=index.d.ts.map

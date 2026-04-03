@@ -12,6 +12,7 @@
 - [x] Manual browser testing of grpcws-demo multiplayer
 - [x] Create LLMGUIDE.md for LLM discoverability
 - [x] Publish TypeScript client to npm (@panyam/servicekit-client)
+- [x] Add TypeScript SSE client: SSEClient, StreamableClient, vendored parser (issue #10)
 
 ## Future Enhancements
 

@@ -524,12 +524,489 @@ var TypedGRPCWSClient = class {
     };
   }
 };
+
+// src/sse-parser.ts
+var ParseError = class extends Error {
+  constructor(message, options) {
+    super(message);
+    this.name = "ParseError";
+    this.type = options.type;
+    this.field = options.field;
+    this.value = options.value;
+    this.line = options.line;
+  }
+};
+function noop(_arg) {
+}
+function createParser(callbacks) {
+  if (typeof callbacks === "function") {
+    throw new TypeError(
+      "`callbacks` must be an object, got a function instead. Did you mean `{onEvent: fn}`?"
+    );
+  }
+  const { onEvent = noop, onError = noop, onRetry = noop, onComment } = callbacks;
+  let incompleteLine = "";
+  let isFirstChunk = true;
+  let id;
+  let data = "";
+  let eventType = "";
+  function feed(newChunk) {
+    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk;
+    const [complete, incomplete] = splitLines(`${incompleteLine}${chunk}`);
+    for (const line of complete) {
+      parseLine(line);
+    }
+    incompleteLine = incomplete;
+    isFirstChunk = false;
+  }
+  function parseLine(line) {
+    if (line === "") {
+      dispatchEvent();
+      return;
+    }
+    if (line.startsWith(":")) {
+      if (onComment) {
+        onComment(line.slice(line.startsWith(": ") ? 2 : 1));
+      }
+      return;
+    }
+    const fieldSeparatorIndex = line.indexOf(":");
+    if (fieldSeparatorIndex !== -1) {
+      const field = line.slice(0, fieldSeparatorIndex);
+      const offset = line[fieldSeparatorIndex + 1] === " " ? 2 : 1;
+      const value = line.slice(fieldSeparatorIndex + offset);
+      processField(field, value, line);
+      return;
+    }
+    processField(line, "", line);
+  }
+  function processField(field, value, line) {
+    switch (field) {
+      case "event":
+        eventType = value;
+        break;
+      case "data":
+        data = `${data}${value}
+`;
+        break;
+      case "id":
+        id = value.includes("\0") ? void 0 : value;
+        break;
+      case "retry":
+        if (/^\d+$/.test(value)) {
+          onRetry(parseInt(value, 10));
+        } else {
+          onError(
+            new ParseError(`Invalid \`retry\` value: "${value}"`, {
+              type: "invalid-retry",
+              value,
+              line
+            })
+          );
+        }
+        break;
+      default:
+        onError(
+          new ParseError(
+            `Unknown field "${field.length > 20 ? `${field.slice(0, 20)}\u2026` : field}"`,
+            { type: "unknown-field", field, value, line }
+          )
+        );
+        break;
+    }
+  }
+  function dispatchEvent() {
+    const shouldDispatch = data.length > 0;
+    if (shouldDispatch) {
+      onEvent({
+        id,
+        event: eventType || void 0,
+        data: data.endsWith("\n") ? data.slice(0, -1) : data
+      });
+    }
+    id = void 0;
+    data = "";
+    eventType = "";
+  }
+  function reset(options = {}) {
+    if (incompleteLine && options.consume) {
+      parseLine(incompleteLine);
+    }
+    isFirstChunk = true;
+    id = void 0;
+    data = "";
+    eventType = "";
+    incompleteLine = "";
+  }
+  return { feed, reset };
+}
+function splitLines(chunk) {
+  const lines = [];
+  let incompleteLine = "";
+  let searchIndex = 0;
+  while (searchIndex < chunk.length) {
+    const crIndex = chunk.indexOf("\r", searchIndex);
+    const lfIndex = chunk.indexOf("\n", searchIndex);
+    let lineEnd = -1;
+    if (crIndex !== -1 && lfIndex !== -1) {
+      lineEnd = Math.min(crIndex, lfIndex);
+    } else if (crIndex !== -1) {
+      if (crIndex === chunk.length - 1) {
+        lineEnd = -1;
+      } else {
+        lineEnd = crIndex;
+      }
+    } else if (lfIndex !== -1) {
+      lineEnd = lfIndex;
+    }
+    if (lineEnd === -1) {
+      incompleteLine = chunk.slice(searchIndex);
+      break;
+    } else {
+      const line = chunk.slice(searchIndex, lineEnd);
+      lines.push(line);
+      searchIndex = lineEnd + 1;
+      if (chunk[searchIndex - 1] === "\r" && chunk[searchIndex] === "\n") {
+        searchIndex++;
+      }
+    }
+  }
+  return [lines, incompleteLine];
+}
+
+// src/sse-mock.ts
+function createMockSSEPair(contentType = "text/event-stream") {
+  let streamController = null;
+  let capturedUrl;
+  let capturedHeaders = {};
+  let capturedMethod;
+  let capturedBody;
+  const encoder = new TextEncoder();
+  const enqueue = (text) => {
+    if (streamController) {
+      streamController.enqueue(encoder.encode(text));
+    }
+  };
+  const mockFetch = async (input, init) => {
+    capturedUrl = typeof input === "string" ? input : input.toString();
+    capturedMethod = init?.method ?? "GET";
+    capturedBody = typeof init?.body === "string" ? init.body : void 0;
+    capturedHeaders = {};
+    if (init?.headers) {
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((v, k) => {
+          capturedHeaders[k] = v;
+        });
+      } else if (Array.isArray(init.headers)) {
+        for (const [k, v] of init.headers) {
+          capturedHeaders[k] = v;
+        }
+      } else {
+        capturedHeaders = { ...init.headers };
+      }
+    }
+    const body = new ReadableStream({
+      start(controller2) {
+        streamController = controller2;
+      }
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "Content-Type": contentType }
+    });
+  };
+  const controller = {
+    simulateMessage(data) {
+      enqueue(`data: ${JSON.stringify(data)}
+
+`);
+    },
+    simulateEvent(event, data) {
+      enqueue(`event: ${event}
+data: ${JSON.stringify(data)}
+
+`);
+    },
+    simulateEventWithId(event, id, data) {
+      enqueue(`event: ${event}
+id: ${id}
+data: ${JSON.stringify(data)}
+
+`);
+    },
+    simulateComment(text) {
+      enqueue(`: ${text}
+
+`);
+    },
+    simulateClose() {
+      if (streamController) {
+        streamController.close();
+        streamController = null;
+      }
+    },
+    get receivedUrl() {
+      return capturedUrl;
+    },
+    get receivedHeaders() {
+      return capturedHeaders;
+    },
+    get receivedMethod() {
+      return capturedMethod;
+    },
+    get receivedBody() {
+      return capturedBody;
+    }
+  };
+  return { fetch: mockFetch, controller };
+}
+
+// src/sse-client.ts
+var SSEClient = class _SSEClient {
+  constructor(options = {}) {
+    this._connected = false;
+    this._abortController = null;
+    /** Called when an unnamed data event is received (no "event:" field). */
+    this.onMessage = () => {
+    };
+    /** Called when a named event is received (has "event:" field). */
+    this.onEvent = () => {
+    };
+    /** Called when the SSE stream closes (server closes or network error). */
+    this.onClose = () => {
+    };
+    /** Called when an error occurs (fetch failure, parse error). */
+    this.onError = () => {
+    };
+    this._fetch = options.fetch ?? globalThis.fetch;
+    this._headers = options.headers ?? {};
+    this._lastEventId = options.lastEventId;
+  }
+  /**
+   * Connect to an SSE endpoint.
+   *
+   * @param url The HTTP URL to connect to
+   * @returns Promise that resolves when the connection is established (headers received)
+   * @throws Error if the response is not 200 or not text/event-stream
+   */
+  async connect(url) {
+    const headers = { ...this._headers };
+    if (this._lastEventId) {
+      headers["Last-Event-ID"] = this._lastEventId;
+    }
+    this._abortController = new AbortController();
+    const response = await this._fetch(url, {
+      headers,
+      signal: this._abortController.signal
+    });
+    if (!response.ok) {
+      throw new Error(`SSE connection failed: HTTP ${response.status}`);
+    }
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (!contentType.includes("text/event-stream")) {
+      throw new Error(`Expected text/event-stream, got ${contentType}`);
+    }
+    if (!response.body) {
+      throw new Error("Response has no body");
+    }
+    this._connected = true;
+    this._readStream(response.body);
+  }
+  /**
+   * Close the SSE connection.
+   * Aborts the underlying fetch request and fires onClose.
+   */
+  close() {
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
+    if (this._connected) {
+      this._connected = false;
+      this.onClose();
+    }
+  }
+  /** Whether the client is currently connected to an SSE stream. */
+  get isConnected() {
+    return this._connected;
+  }
+  /** The last event ID received from the server (for reconnection). */
+  get lastEventId() {
+    return this._lastEventId;
+  }
+  /**
+   * Create a mock SSEClient + controller pair for testing.
+   *
+   * @example
+   * ```typescript
+   * const { client, controller } = SSEClient.createMock();
+   * client.onMessage = (data) => received.push(data);
+   * await client.connect('http://test/events');
+   * controller.simulateMessage({ hello: 'world' });
+   * controller.simulateClose();
+   * ```
+   */
+  static createMock() {
+    const { fetch, controller } = createMockSSEPair();
+    const client = new _SSEClient({ fetch });
+    return { client, controller };
+  }
+  /** Read the SSE stream and dispatch events via the parser. */
+  async _readStream(body) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    const parser = createParser({
+      onEvent: (event) => {
+        if (event.id !== void 0) {
+          this._lastEventId = event.id;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch {
+          parsed = event.data;
+        }
+        if (event.event) {
+          this.onEvent(event.event, parsed);
+        } else {
+          this.onMessage(parsed);
+        }
+      }
+      // Comments (keepalive) are silently consumed — no handler needed
+    });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      this.onError(String(err));
+    } finally {
+      if (this._connected) {
+        this._connected = false;
+        this.onClose();
+      }
+    }
+  }
+};
+
+// src/streamable-client.ts
+var StreamableClient = class {
+  constructor(options = {}) {
+    this._abortController = null;
+    /** Called when an unnamed data event is received during streaming. */
+    this.onMessage = () => {
+    };
+    /** Called when a named event is received during streaming. */
+    this.onEvent = () => {
+    };
+    /** Called when the SSE stream completes (channel closed by server). */
+    this.onDone = () => {
+    };
+    /** Called when an error occurs. */
+    this.onError = () => {
+    };
+    this._fetch = options.fetch ?? globalThis.fetch;
+    this._headers = options.headers ?? {};
+  }
+  /**
+   * POST a request to a StreamableServe endpoint.
+   *
+   * Returns the parsed response for JSON responses, or undefined for
+   * streaming responses (events dispatched via callbacks).
+   *
+   * @param url The endpoint URL
+   * @param body The request body (JSON-serialized)
+   * @returns Parsed response (JSON path) or undefined (streaming path)
+   */
+  async post(url, body) {
+    this._abortController = new AbortController();
+    const response = await this._fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream, application/json",
+        ...this._headers
+      },
+      body: JSON.stringify(body),
+      signal: this._abortController.signal
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed: HTTP ${response.status}`);
+    }
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (contentType.includes("application/json")) {
+      const result = await response.json();
+      return result;
+    }
+    if (contentType.includes("text/event-stream")) {
+      if (!response.body) {
+        throw new Error("Streaming response has no body");
+      }
+      await this._readStream(response.body);
+      return void 0;
+    }
+    throw new Error(`Unexpected Content-Type: ${contentType}`);
+  }
+  /**
+   * Abort the current request/stream.
+   */
+  close() {
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
+  }
+  /** Read an SSE stream and dispatch events. */
+  async _readStream(body) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    const parser = createParser({
+      onEvent: (event) => {
+        let parsed;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch {
+          parsed = event.data;
+        }
+        if (event.event) {
+          this.onEvent(event.event, parsed);
+        } else {
+          this.onMessage(parsed);
+        }
+      }
+    });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      this.onError(String(err));
+    } finally {
+      this.onDone();
+    }
+  }
+};
 export {
   BaseWSClient,
   BinaryCodec,
   GRPCWSClient,
   JSONCodec,
+  ParseError,
   ReadyState,
+  SSEClient,
+  StreamableClient,
   TypedGRPCWSClient,
-  createMockWSPair
+  createMockSSEPair,
+  createMockWSPair,
+  createParser
 };
