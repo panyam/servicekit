@@ -1,7 +1,7 @@
 # ServiceKit
 
 ## Version
-0.0.12
+0.0.14
 
 ## Provides
 - websocket-infrastructure: Production-grade WebSocket connection management
@@ -33,7 +33,7 @@ newstack/servicekit/master
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/servicekit 0.0.12
+require github.com/panyam/servicekit 0.0.14
 
 // Local development
 replace github.com/panyam/servicekit => ~/newstack/servicekit/master
