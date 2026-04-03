@@ -1,6 +1,6 @@
 {
   "name": "@panyam/servicekit-client",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "TypeScript client for ServiceKit WebSocket and SSE protocols",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
