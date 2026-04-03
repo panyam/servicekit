@@ -127,10 +127,6 @@ func NewJsonRequest(method string, endpoint string, body map[string]any) (req *h
 			return nil, err
 		}
 	}
-	if body != nil {
-		json.MarshalIndent(body, "", "  ")
-		// log.Println("BODY: ", string(marshalled))
-	}
 	return NewBytesRequest(method, endpoint, bodyBytes)
 }
 
@@ -182,7 +178,6 @@ func Call(req *http.Request, client *http.Client) (response any, err error) {
 func JsonGet(url string, onReq func(req *http.Request)) (any, *http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatalln(err)
 		return nil, nil, err
 	}
 	if onReq != nil {
@@ -191,7 +186,6 @@ func JsonGet(url string, onReq func(req *http.Request)) (any, *http.Response, er
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalln(err)
 		return nil, resp, err
 	}
 	defer resp.Body.Close()

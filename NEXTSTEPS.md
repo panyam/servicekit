@@ -48,6 +48,6 @@
 - [ ] Add examples for ProtoJSONCodec with custom options
 
 ### Code Quality
-- [ ] Consider build tags for optional proto dependency
+- [x] Review error handling consistency (7 bugs fixed: inverted conditions, os.Exit in library, header ordering, dead code)
+- [ ] Consider build tags for optional proto dependency (deferred: sub-package split preferred over build tags)
 - [ ] Add more godoc examples
-- [ ] Review error handling consistency

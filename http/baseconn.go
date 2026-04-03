@@ -155,7 +155,11 @@ func (b *BaseConn[I, O]) writeError(conn *websocket.Conn, err error) error {
 		"type":  "error",
 		"error": err.Error(),
 	}
-	data, _ := json.Marshal(errMsg)
+	data, marshalErr := json.Marshal(errMsg)
+	if marshalErr != nil {
+		log.Printf("Failed to marshal error message: %v", marshalErr)
+		return marshalErr
+	}
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
@@ -168,7 +172,11 @@ func (b *BaseConn[I, O]) writePing(conn *websocket.Conn, ping *PingData) error {
 		"connId": ping.ConnId,
 		"name":   ping.Name,
 	}
-	data, _ := json.Marshal(pingMsg)
+	data, marshalErr := json.Marshal(pingMsg)
+	if marshalErr != nil {
+		log.Printf("Failed to marshal ping message: %v", marshalErr)
+		return marshalErr
+	}
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 

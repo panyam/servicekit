@@ -69,8 +69,8 @@ func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
 			}
 		}
 	}
-	writer.WriteHeader(httpCode)
 	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(httpCode)
 	jsonResp, err := json.Marshal(output)
 	if err != nil {
 		log.Println("Error happened in JSON marshal. Err: ", err)
@@ -121,7 +121,7 @@ func WSConnWriteError(wsConn *websocket.Conn, err error) error {
 			errdata["error"] = er.Code()
 		}
 		jsonData, outerr := json.Marshal(errdata)
-		if outerr != nil {
+		if outerr == nil {
 			outerr = wsConn.WriteMessage(websocket.TextMessage, jsonData)
 		}
 		if outerr != nil {
@@ -139,12 +139,13 @@ func WSConnWriteMessage(wsConn *websocket.Conn, msg any) error {
 	jsonResp, err := json.Marshal(msg)
 	if err != nil {
 		log.Println("Error happened in JSON marshal. Err: ", err)
+		return err
 	}
-	outerr := wsConn.WriteMessage(websocket.TextMessage, jsonResp)
-	if err != nil {
+	if err := wsConn.WriteMessage(websocket.TextMessage, jsonResp); err != nil {
 		log.Println("Error sending message: ", err)
+		return err
 	}
-	return outerr
+	return nil
 }
 
 // WSConnJSONReaderWriter creates concurrent reader and writer for JSON messages
