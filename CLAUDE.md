@@ -41,6 +41,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 | [NEXTSTEPS.md](NEXTSTEPS.md) | TODO list with completed/remaining work |
 | [CAPABILITIES.md](CAPABILITIES.md) | Stack component manifest |
 | [README.md](README.md) | User-facing tutorial and API guide |
+| [UPGRADING.md](UPGRADING.md) | Migration guides (JSONConn → typed BaseConn) |
 
 ## Module
 

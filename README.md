@@ -909,6 +909,10 @@ router.HandleFunc("/rpc", gohttp.StreamableServe(
 - **StreamResponse** — `Content-Type: text/event-stream`, channel-based for backpressure
 - Request-scoped streams (simpler than SSEConn for one-shot streaming)
 
+## Upgrading
+
+See [UPGRADING.md](UPGRADING.md) for migration guides (e.g., JSONConn to typed BaseConn).
+
 ## Middleware Package (`middleware/`)
 
 Production-grade HTTP/WebSocket middleware with zero app-specific imports. All components are nil-safe.
