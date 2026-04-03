@@ -43,11 +43,11 @@
 - [ ] Add middleware benchmarks
 
 ### Documentation
+- [x] Add examples for TypedJSONCodec usage (godoc ExampleTypedJSONCodec)
+- [x] Add examples for ProtoJSONCodec with custom options (covered in LLMGUIDE Template 3)
+- [x] Add more godoc examples (SSEServe, StreamableServe, ListenAndServeGraceful, Guard, RateLimiter, OriginChecker, ApplyDefaults, JSONCodec, TypedJSONCodec)
 - [ ] Add migration guide for existing JSONConn users
-- [ ] Add examples for TypedJSONCodec usage
-- [ ] Add examples for ProtoJSONCodec with custom options
 
 ### Code Quality
 - [x] Review error handling consistency (7 bugs fixed: inverted conditions, os.Exit in library, header ordering, dead code)
 - [ ] Consider build tags for optional proto dependency (deferred: sub-package split preferred over build tags)
-- [ ] Add more godoc examples
