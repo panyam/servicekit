@@ -13,12 +13,12 @@ import (
 )
 
 type TimeHandler struct {
-	Fanout *conc.FanOut[gohttp.OutgoingMessage[any]]
+	Fanout *conc.QueuedFanOut[gohttp.OutgoingMessage[any]]
 }
 
 // ... along with a corresponding New method
 func NewTimeHandler() *TimeHandler {
-	return &TimeHandler{Fanout: conc.NewFanOut[gohttp.OutgoingMessage[any]](nil)}
+	return &TimeHandler{Fanout: conc.NewQueuedFanOut[gohttp.OutgoingMessage[any]]()}
 }
 
 // The Validate method gates the subscribe request to see if it should be upgraded

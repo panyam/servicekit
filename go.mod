@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
-	github.com/panyam/gocurrent v0.0.13
+	github.com/panyam/gocurrent v0.1.0
 	github.com/panyam/goutils v0.1.8
 	golang.org/x/time v0.15.0
 	google.golang.org/grpc v1.78.0
