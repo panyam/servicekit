@@ -197,6 +197,48 @@ func TestSSEHubCloseAll(t *testing.T) {
 	}
 }
 
+// TestSSEHubSendEventWithID verifies that SendEventWithID delivers an event
+// with both event type and ID fields to the targeted connection, and returns
+// true. Returns false for nonexistent connections.
+func TestSSEHubSendEventWithID(t *testing.T) {
+	hub := NewSSEHub[any]()
+
+	conn := createTestSSEConn[any](t, &JSONCodec{}, "target")
+	defer conn.OnClose()
+	hub.Register(conn)
+
+	ok := hub.SendEventWithID("target", "update", "evt-42", map[string]any{"version": 3})
+	if !ok {
+		t.Error("Expected SendEventWithID to return true for existing connection")
+	}
+
+	ok = hub.SendEventWithID("nonexistent", "update", "evt-42", map[string]any{"version": 3})
+	if ok {
+		t.Error("Expected SendEventWithID to return false for nonexistent connection")
+	}
+
+	// Give writer goroutine time to process
+	time.Sleep(50 * time.Millisecond)
+}
+
+// TestSSEHubBroadcastEventWithID verifies that BroadcastEventWithID sends a
+// named event with an ID to all registered connections.
+func TestSSEHubBroadcastEventWithID(t *testing.T) {
+	hub := NewSSEHub[any]()
+
+	conns := make([]*BaseSSEConn[any], 3)
+	for i := range conns {
+		conns[i] = createTestSSEConn[any](t, &JSONCodec{}, fmt.Sprintf("conn%d", i))
+		defer conns[i].OnClose()
+		hub.Register(conns[i])
+	}
+
+	hub.BroadcastEventWithID("notification", "evt-1", map[string]any{"alert": "test"})
+
+	// Give writer goroutines time to process
+	time.Sleep(50 * time.Millisecond)
+}
+
 // TestSSEHubConcurrentAccess verifies that concurrent Register, Unregister,
 // Send, and Broadcast operations do not cause data races. Run with -race flag.
 func TestSSEHubConcurrentAccess(t *testing.T) {
