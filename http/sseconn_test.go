@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -39,10 +38,10 @@ type sseEvent struct {
 	Comment string // comment line (starts with ":")
 }
 
-// readSSEEvent reads a single SSE event from a bufio.Reader. It blocks until
-// a complete event (terminated by a blank line) is received or the timeout
-// elapses. Returns the parsed event fields. Comments (lines starting with ":")
-// are returned as a comment-only event.
+// readSSEEvent reads a single SSE event from a bufio.Reader using the shared
+// SSEEventReader. It blocks until a complete event is received or the timeout
+// elapses. The goroutine+timeout pattern is needed because SSE streams are
+// long-lived and tests must not hang on slow/stuck connections.
 func readSSEEvent(t *testing.T, reader *bufio.Reader, timeout time.Duration) (sseEvent, error) {
 	t.Helper()
 	type result struct {
@@ -51,39 +50,16 @@ func readSSEEvent(t *testing.T, reader *bufio.Reader, timeout time.Duration) (ss
 	}
 	ch := make(chan result, 1)
 	go func() {
-		var ev sseEvent
-		var dataLines []string
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				ch <- result{ev, err}
-				return
-			}
-			line = strings.TrimRight(line, "\n")
-
-			if line == "" {
-				// Blank line = end of event
-				if len(dataLines) > 0 {
-					ev.Data = strings.Join(dataLines, "\n")
-				}
-				ch <- result{ev, nil}
-				return
-			}
-
-			if strings.HasPrefix(line, ":") {
-				// SSE comment
-				ev.Comment = strings.TrimPrefix(line, ": ")
-				// Comments followed by blank line are standalone events
-				continue
-			}
-
-			if strings.HasPrefix(line, "event: ") {
-				ev.Event = strings.TrimPrefix(line, "event: ")
-			} else if strings.HasPrefix(line, "data: ") {
-				dataLines = append(dataLines, strings.TrimPrefix(line, "data: "))
-			} else if strings.HasPrefix(line, "id: ") {
-				ev.ID = strings.TrimPrefix(line, "id: ")
-			}
+		r := NewSSEEventReader(reader)
+		ev, err := r.ReadEvent()
+		ch <- result{
+			event: sseEvent{
+				Event:   ev.Event,
+				Data:    ev.Data,
+				ID:      ev.ID,
+				Comment: ev.Comment,
+			},
+			err: err,
 		}
 	}()
 
