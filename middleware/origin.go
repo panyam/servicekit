@@ -120,3 +120,61 @@ func (c *OriginChecker) Middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// NewLocalhostOriginChecker creates an OriginChecker that only allows
+// localhost origins (localhost, 127.0.0.1, ::1). This is the secure default
+// for local development servers that don't have an explicit allowlist.
+//
+// Unlike NewOriginChecker(nil) which returns nil (allow-all), this returns
+// a restrictive checker that blocks remote origins.
+func NewLocalhostOriginChecker() *OriginChecker {
+	return NewOriginChecker([]string{"localhost"})
+}
+
+// CheckRequest validates an HTTP request's origin using both Origin and Host
+// headers. This implements the full DNS rebinding protection pattern:
+//
+//   - Origin header present → delegates to Check(origin)
+//   - Origin absent, Host is localhost → allow (local dev tools like curl)
+//   - Origin absent, Host is remote → reject (potential DNS rebinding)
+//   - No Origin or Host info → allow (same-origin or non-browser client)
+//
+// Nil-safe: calling on a nil *OriginChecker allows all requests.
+func (c *OriginChecker) CheckRequest(r *http.Request) bool {
+	if c == nil {
+		return true
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		return c.Check(origin)
+	}
+
+	// No Origin header — fall back to Host header.
+	host := r.Host
+	if host == "" {
+		host = r.Header.Get("Host")
+	}
+	if host == "" {
+		return true // No origin info to validate
+	}
+
+	return isLocalhostHost(host)
+}
+
+// isLocalhostHost checks if a Host header value is a localhost variant.
+// Strips the port if present before comparing.
+func isLocalhostHost(host string) bool {
+	h := host
+	// Strip port. Handle IPv6 [::1]:port format.
+	if idx := strings.LastIndex(h, ":"); idx != -1 {
+		// Make sure we're not stripping part of an IPv6 address
+		if bracketIdx := strings.LastIndex(h, "]"); bracketIdx < idx {
+			h = h[:idx]
+		}
+	}
+	// Strip brackets from IPv6
+	h = strings.TrimPrefix(h, "[")
+	h = strings.TrimSuffix(h, "]")
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
