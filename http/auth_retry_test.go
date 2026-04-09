@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,7 +148,8 @@ func TestDoWithAuthRetry_403_ScopeStepUp(t *testing.T) {
 }
 
 // TestDoWithAuthRetry_403_NoHandler verifies that a 403 with no OnForbidden
-// handler returns an error immediately (no retry possible).
+// handler returns an AuthRetryError immediately with RequiredScopes auto-parsed
+// from the WWW-Authenticate header per RFC 6750.
 func TestDoWithAuthRetry_403_NoHandler(t *testing.T) {
 	_, err := DoWithAuthRetry(
 		&AuthRetryConfig{
@@ -160,12 +162,63 @@ func TestDoWithAuthRetry_403_NoHandler(t *testing.T) {
 		func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 403,
+				Header:     http.Header{"Www-Authenticate": []string{`Bearer scope="read write"`}},
 				Body:       io.NopCloser(strings.NewReader("forbidden")),
 			}, nil
 		},
 	)
 	if err == nil {
 		t.Fatal("expected error when OnForbidden is nil")
+	}
+	var authErr *AuthRetryError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected AuthRetryError, got %T: %v", err, err)
+	}
+	if authErr.StatusCode != 403 {
+		t.Errorf("StatusCode = %d, want 403", authErr.StatusCode)
+	}
+	if len(authErr.RequiredScopes) != 2 || authErr.RequiredScopes[0] != "read" || authErr.RequiredScopes[1] != "write" {
+		t.Errorf("RequiredScopes = %v, want [read write]", authErr.RequiredScopes)
+	}
+}
+
+// TestDoWithAuthRetry_403_CallbackError verifies that when OnForbidden returns
+// an error, the result is still an AuthRetryError with full response metadata
+// (status, WWW-Authenticate, RequiredScopes) and the callback error as Cause.
+func TestDoWithAuthRetry_403_CallbackError(t *testing.T) {
+	_, err := DoWithAuthRetry(
+		&AuthRetryConfig{
+			SetAuth: func(req *http.Request) error { return nil },
+			OnForbidden: func(resp *http.Response) error {
+				return fmt.Errorf("token source does not support step-up")
+			},
+		},
+		func() (*http.Request, error) {
+			return http.NewRequest("POST", "http://example.com/api", nil)
+		},
+		func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 403,
+				Header:     http.Header{"Www-Authenticate": []string{`Bearer scope="admin:write tools:call"`}},
+				Body:       io.NopCloser(strings.NewReader("forbidden")),
+			}, nil
+		},
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var authErr *AuthRetryError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected AuthRetryError, got %T: %v", err, err)
+	}
+	if authErr.StatusCode != 403 {
+		t.Errorf("StatusCode = %d, want 403", authErr.StatusCode)
+	}
+	if len(authErr.RequiredScopes) != 2 || authErr.RequiredScopes[0] != "admin:write" {
+		t.Errorf("RequiredScopes = %v, want [admin:write tools:call]", authErr.RequiredScopes)
+	}
+	if authErr.Cause == nil {
+		t.Error("Cause should contain the callback error")
 	}
 }
 

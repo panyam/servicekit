@@ -29,17 +29,54 @@ type AuthRetryConfig struct {
 	OnForbidden func(resp *http.Response) error
 }
 
-// AuthRetryError is returned when authentication retry fails.
-// Captures the HTTP status code, response body, and WWW-Authenticate header
-// for diagnostic purposes.
+// AuthRetryError is returned when authentication retry fails (401/403
+// exhausted or callback returned an error). Captures the HTTP response
+// metadata for diagnostic and programmatic use.
+//
+// RequiredScopes is automatically parsed from the WWW-Authenticate header's
+// "scope" parameter per RFC 6750 §3, so callers don't need to parse it
+// themselves.
 type AuthRetryError struct {
-	StatusCode      int
-	Message         string
+	// StatusCode is the HTTP status (401 or 403).
+	StatusCode int
+	// Message describes the failure (response body or callback error message).
+	Message string
+	// WWWAuthenticate is the raw WWW-Authenticate header from the server response.
 	WWWAuthenticate string
+	// RequiredScopes are the scopes parsed from WWW-Authenticate per RFC 6750.
+	// Populated automatically from the "scope" parameter. Empty if not present.
+	RequiredScopes []string
+	// Cause is the underlying error from the callback, if the failure was due
+	// to a callback error rather than retry exhaustion. Nil when retries were
+	// simply exhausted.
+	Cause error
 }
 
 func (e *AuthRetryError) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("auth error %d: %s: %v", e.StatusCode, e.Message, e.Cause)
+	}
 	return fmt.Sprintf("auth error %d: %s", e.StatusCode, e.Message)
+}
+
+func (e *AuthRetryError) Unwrap() error {
+	return e.Cause
+}
+
+// newAuthRetryError builds an AuthRetryError from an HTTP response,
+// automatically parsing scopes from WWW-Authenticate per RFC 6750.
+func newAuthRetryError(statusCode int, body string, wwa string, cause error) *AuthRetryError {
+	var scopes []string
+	if wwa != "" {
+		_, scopes, _ = ParseWWWAuthenticate(wwa)
+	}
+	return &AuthRetryError{
+		StatusCode:      statusCode,
+		Message:         body,
+		WWWAuthenticate: wwa,
+		RequiredScopes:  scopes,
+		Cause:           cause,
+	}
 }
 
 // DoWithAuthRetry executes an HTTP request with automatic retry on 401/403.
@@ -80,36 +117,32 @@ func DoWithAuthRetry(
 		case http.StatusUnauthorized: // 401
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			wwa := resp.Header.Get("Www-Authenticate")
+			msg := strings.TrimSpace(string(body))
 
 			if tried401 || cfg == nil || cfg.OnUnauthorized == nil {
-				return nil, &AuthRetryError{
-					StatusCode:      401,
-					Message:         strings.TrimSpace(string(body)),
-					WWWAuthenticate: resp.Header.Get("Www-Authenticate"),
-				}
+				return nil, newAuthRetryError(401, msg, wwa, nil)
 			}
 			tried401 = true
 
 			if err := cfg.OnUnauthorized(resp); err != nil {
-				return nil, fmt.Errorf("token refresh: %w", err)
+				return nil, newAuthRetryError(401, msg, wwa, err)
 			}
 			continue
 
 		case http.StatusForbidden: // 403
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			wwa := resp.Header.Get("Www-Authenticate")
+			msg := strings.TrimSpace(string(body))
 
 			if tried403 || cfg == nil || cfg.OnForbidden == nil {
-				return nil, &AuthRetryError{
-					StatusCode:      403,
-					Message:         strings.TrimSpace(string(body)),
-					WWWAuthenticate: resp.Header.Get("Www-Authenticate"),
-				}
+				return nil, newAuthRetryError(403, msg, wwa, nil)
 			}
 			tried403 = true
 
 			if err := cfg.OnForbidden(resp); err != nil {
-				return nil, fmt.Errorf("scope step-up: %w", err)
+				return nil, newAuthRetryError(403, msg, wwa, err)
 			}
 			continue
 
