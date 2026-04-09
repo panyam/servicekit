@@ -114,6 +114,32 @@ func (h *SSEHub[O]) BroadcastEvent(event string, msg O) {
 	}
 }
 
+// SendEventWithID delivers a named event with an ID to a specific connection.
+// The ID is set via the SSE "id:" field, enabling client reconnection via the
+// Last-Event-ID header.
+// Returns true if the connection was found and the message was queued.
+// Returns false if the connection ID does not exist.
+func (h *SSEHub[O]) SendEventWithID(connId, event, id string, msg O) bool {
+	h.mu.RLock()
+	conn, ok := h.conns[connId]
+	h.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	conn.SendEventWithID(event, id, msg)
+	return true
+}
+
+// BroadcastEventWithID sends a named event with an ID to all registered
+// connections. The ID is set via the SSE "id:" field.
+func (h *SSEHub[O]) BroadcastEventWithID(event, id string, msg O) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, conn := range h.conns {
+		conn.SendEventWithID(event, id, msg)
+	}
+}
+
 // Count returns the number of currently registered connections.
 func (h *SSEHub[O]) Count() int {
 	h.mu.RLock()
