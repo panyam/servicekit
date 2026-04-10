@@ -1,12 +1,23 @@
 package http
 
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
+
+// MaxErrorBodySize is the maximum number of bytes read from an HTTP error
+// response body. Prevents memory exhaustion from malicious or misconfigured
+// servers returning oversized error payloads. Shared by DoWithAuthRetry and
+// any other error-body readers in this package.
+const MaxErrorBodySize = 16 << 10 // 16 KB
 
 // HTTPStatusError represents an HTTP response with a non-2xx status code.
-// It captures the status code and response body for error reporting and
-// classification (e.g., 5xx errors are typically transient/retriable).
+// It captures the status code, response headers, and response body for error
+// reporting, classification (e.g., 5xx errors are typically transient/retriable),
+// and programmatic inspection (e.g., reading WWW-Authenticate or Retry-After).
 type HTTPStatusError struct {
 	StatusCode int
+	Header     http.Header
 	Body       string
 }
 

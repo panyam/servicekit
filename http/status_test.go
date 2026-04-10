@@ -1,6 +1,8 @@
 package http
 
 import (
+	"errors"
+	"net/http"
 	"testing"
 )
 
@@ -67,5 +69,41 @@ func TestHTTPStatusError_IsTransient(t *testing.T) {
 	err4xx := &HTTPStatusError{StatusCode: 404}
 	if IsHTTPTransient(err4xx.StatusCode) {
 		t.Error("404 should not be transient")
+	}
+}
+
+// TestHTTPStatusError_HeaderAccessible verifies that the Header field on
+// HTTPStatusError is populated and accessible via errors.As. This is important
+// for callers that need to inspect response headers (e.g., Retry-After,
+// X-Request-Id) from non-2xx error responses for diagnostics or retry logic.
+func TestHTTPStatusError_HeaderAccessible(t *testing.T) {
+	h := http.Header{}
+	h.Set("X-Request-Id", "abc123")
+	h.Set("Retry-After", "5")
+
+	err := error(&HTTPStatusError{
+		StatusCode: 503,
+		Header:     h,
+		Body:       "service unavailable",
+	})
+
+	var target *HTTPStatusError
+	if !errors.As(err, &target) {
+		t.Fatal("errors.As failed to match HTTPStatusError")
+	}
+	if got := target.Header.Get("X-Request-Id"); got != "abc123" {
+		t.Errorf("Header X-Request-Id = %q, want %q", got, "abc123")
+	}
+	if got := target.Header.Get("Retry-After"); got != "5" {
+		t.Errorf("Header Retry-After = %q, want %q", got, "5")
+	}
+}
+
+// TestMaxErrorBodySize_Value verifies the MaxErrorBodySize constant is 16 KB.
+// This constant caps error response body reads to prevent memory exhaustion
+// from oversized error payloads.
+func TestMaxErrorBodySize_Value(t *testing.T) {
+	if MaxErrorBodySize != 16*1024 {
+		t.Errorf("MaxErrorBodySize = %d, want %d", MaxErrorBodySize, 16*1024)
 	}
 }

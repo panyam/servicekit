@@ -115,7 +115,7 @@ func DoWithAuthRetry(
 
 		switch resp.StatusCode {
 		case http.StatusUnauthorized: // 401
-			body, _ := io.ReadAll(resp.Body)
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxErrorBodySize))
 			resp.Body.Close()
 			wwa := resp.Header.Get("Www-Authenticate")
 			msg := strings.TrimSpace(string(body))
@@ -131,7 +131,7 @@ func DoWithAuthRetry(
 			continue
 
 		case http.StatusForbidden: // 403
-			body, _ := io.ReadAll(resp.Body)
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxErrorBodySize))
 			resp.Body.Close()
 			wwa := resp.Header.Get("Www-Authenticate")
 			msg := strings.TrimSpace(string(body))

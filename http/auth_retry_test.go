@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -280,5 +281,61 @@ func TestDoWithAuthRetry_NilConfig(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error for 401 with nil config")
+	}
+}
+
+// TestDoWithAuthRetry_401BodyTruncatedAtMaxErrorBodySize verifies that 401
+// error response bodies exceeding MaxErrorBodySize are truncated to prevent
+// memory exhaustion from malicious or misconfigured servers returning oversized
+// error payloads.
+func TestDoWithAuthRetry_401BodyTruncatedAtMaxErrorBodySize(t *testing.T) {
+	largeBody := bytes.Repeat([]byte("x"), int(MaxErrorBodySize)*4)
+
+	_, err := DoWithAuthRetry(nil,
+		func() (*http.Request, error) {
+			return http.NewRequest("GET", "http://example.com", nil)
+		},
+		func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 401,
+				Header:     http.Header{},
+				Body:       io.NopCloser(bytes.NewReader(largeBody)),
+			}, nil
+		},
+	)
+
+	var authErr *AuthRetryError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected AuthRetryError, got %T: %v", err, err)
+	}
+	if len(authErr.Message) > int(MaxErrorBodySize) {
+		t.Errorf("body length = %d, want <= %d (MaxErrorBodySize)", len(authErr.Message), MaxErrorBodySize)
+	}
+}
+
+// TestDoWithAuthRetry_403BodyTruncatedAtMaxErrorBodySize verifies that 403
+// error response bodies are also subject to the MaxErrorBodySize cap.
+func TestDoWithAuthRetry_403BodyTruncatedAtMaxErrorBodySize(t *testing.T) {
+	largeBody := bytes.Repeat([]byte("y"), int(MaxErrorBodySize)*4)
+
+	_, err := DoWithAuthRetry(nil,
+		func() (*http.Request, error) {
+			return http.NewRequest("GET", "http://example.com", nil)
+		},
+		func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 403,
+				Header:     http.Header{},
+				Body:       io.NopCloser(bytes.NewReader(largeBody)),
+			}, nil
+		},
+	)
+
+	var authErr *AuthRetryError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected AuthRetryError, got %T: %v", err, err)
+	}
+	if len(authErr.Message) > int(MaxErrorBodySize) {
+		t.Errorf("body length = %d, want <= %d (MaxErrorBodySize)", len(authErr.Message), MaxErrorBodySize)
 	}
 }
