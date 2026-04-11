@@ -53,6 +53,7 @@ func DefaultSSEConnConfig() *SSEConnConfig {
 //   - "event:" sets the event type (clients listen via addEventListener)
 //   - "data:" carries the payload (multiple lines joined with "\n")
 //   - "id:" sets the last event ID (used for reconnection via Last-Event-ID header)
+//   - "retry:" sets the client's reconnection delay in milliseconds
 //   - Lines starting with ":" are comments (used for keepalive)
 type SSEOutgoingMessage[O any] struct {
 	// Data is a regular output message. Encoded via Codec, sent as SSE "data:" field.
@@ -66,6 +67,15 @@ type SSEOutgoingMessage[O any] struct {
 	// ID is the SSE event ID ("id:" field). Only used with Data.
 	// Enables client reconnection via the Last-Event-ID header.
 	ID string
+
+	// Retry is the reconnection delay hint in milliseconds, emitted as the
+	// SSE "retry:" field. When non-zero, the client uses this value as its
+	// next reconnection delay if the connection drops. Zero or negative
+	// values are ignored (no retry line written).
+	//
+	// Can be sent alongside Data (as a combined event+hint) or as a bare
+	// hint via SendRetry (no Data, just the retry line).
+	Retry int
 
 	// Comment is an SSE comment line (for keepalive). Mutually exclusive with Data.
 	// Sent as ": {comment}\n\n".
@@ -216,6 +226,14 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 
+		// Handle bare retry hint (no data). Used by SendRetry to change the
+		// client's reconnection delay without delivering application data.
+		if msg.Data == nil && msg.Retry > 0 {
+			fmt.Fprintf(w, "retry: %d\n\n", msg.Retry)
+			flusher.Flush()
+			return nil
+		}
+
 		// Handle data messages
 		if msg.Data != nil {
 			data, _, err := b.Codec.Encode(*msg.Data)
@@ -228,6 +246,12 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 			}
 			if msg.ID != "" {
 				fmt.Fprintf(w, "id: %s\n", msg.ID)
+			}
+			// Retry is emitted before data so clients that parse
+			// field-by-field see the hint alongside the event payload.
+			// Per SSE spec, negative or zero values are dropped.
+			if msg.Retry > 0 {
+				fmt.Fprintf(w, "retry: %d\n", msg.Retry)
 			}
 
 			// Per SSE spec, multi-line data must be split into separate data: lines
@@ -322,6 +346,24 @@ func (b *BaseSSEConn[O]) SendEventWithID(event string, id string, msg O) {
 func (b *BaseSSEConn[O]) SendKeepalive() {
 	if b.Writer != nil {
 		b.Writer.Send(SSEOutgoingMessage[O]{Comment: "keepalive"})
+	}
+}
+
+// SendRetry emits a bare SSE "retry:" field to change the client's
+// reconnection delay. Used for server-initiated disconnect hints — e.g., a
+// long-running tool handler tells the client to back off for N milliseconds
+// before reconnecting. Has no effect if ms <= 0 or the Writer is nil.
+//
+// Per WHATWG SSE spec (https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream):
+// the retry field sets the client's reconnection time in integer
+// milliseconds. Clients that do not support the field ignore it.
+//
+// To combine a retry hint with a data delivery in one event, set Retry on
+// an SSEOutgoingMessage that also has Data set, and pass it to the Writer
+// directly.
+func (b *BaseSSEConn[O]) SendRetry(ms int) {
+	if b.Writer != nil && ms > 0 {
+		b.Writer.Send(SSEOutgoingMessage[O]{Retry: ms})
 	}
 }
 

@@ -35,6 +35,7 @@ type sseEvent struct {
 	Event   string // "event:" field value
 	Data    string // "data:" field value (joined if multi-line)
 	ID      string // "id:" field value
+	Retry   int    // "retry:" field value in milliseconds (0 = not set)
 	Comment string // comment line (starts with ":")
 }
 
@@ -57,6 +58,7 @@ func readSSEEvent(t *testing.T, reader *bufio.Reader, timeout time.Duration) (ss
 				Event:   ev.Event,
 				Data:    ev.Data,
 				ID:      ev.ID,
+				Retry:   ev.Retry,
 				Comment: ev.Comment,
 			},
 			err: err,
