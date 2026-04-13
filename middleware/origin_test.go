@@ -27,6 +27,9 @@ func TestOriginChecker_Check(t *testing.T) {
 		{"multiple origins", []string{"excaliframe.com", "localhost"}, "http://localhost:5173", true},
 		{"empty origin rejected", []string{"excaliframe.com"}, "", false},
 		{"port ignored", []string{"excaliframe.com"}, "https://excaliframe.com:443", true},
+		{"star allows all", []string{"*"}, "https://evil.com", true},
+		{"star allows empty origin", []string{"*"}, "", true},
+		{"star with others allows all", []string{"excaliframe.com", "*"}, "https://evil.com", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

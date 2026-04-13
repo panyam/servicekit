@@ -29,8 +29,8 @@ type originPattern struct {
 }
 
 // NewOriginChecker creates a checker from a list of allowed origins.
-// Accepts formats: "https://example.com", "*.example.com", "localhost".
-// Returns nil if the list is empty (caller should skip the check).
+// Accepts formats: "https://example.com", "*.example.com", "localhost", "*".
+// Returns nil if the list is empty or contains "*" (allow all origins).
 func NewOriginChecker(origins []string) *OriginChecker {
 	if len(origins) == 0 {
 		return nil
@@ -40,6 +40,9 @@ func NewOriginChecker(origins []string) *OriginChecker {
 		o = strings.TrimSpace(o)
 		if o == "" {
 			continue
+		}
+		if o == "*" {
+			return nil // allow all origins
 		}
 		p := originPattern{raw: o}
 		if o == "localhost" {
