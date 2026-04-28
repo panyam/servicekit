@@ -201,6 +201,69 @@ func TestCORS_AllowMethodsAndHeaders(t *testing.T) {
 	}
 }
 
+func TestCORS_CustomMethods(t *testing.T) {
+	handler := CORS(nil, CORSAllowMethods("GET", "POST", "DELETE", "OPTIONS"))(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	req := httptest.NewRequest("OPTIONS", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE, OPTIONS" {
+		t.Errorf("expected custom methods, got %q", got)
+	}
+}
+
+func TestCORS_CustomHeaders(t *testing.T) {
+	handler := CORS(nil, CORSAllowHeaders("Content-Type", "Authorization", "Mcp-Session-Id"))(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization, Mcp-Session-Id" {
+		t.Errorf("expected custom headers, got %q", got)
+	}
+}
+
+func TestCORS_ExposeHeaders(t *testing.T) {
+	handler := CORS(nil, CORSExposeHeaders("Mcp-Session-Id"))(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "Mcp-Session-Id" {
+		t.Errorf("expected Mcp-Session-Id exposed, got %q", got)
+	}
+}
+
+func TestCORS_NoExposeHeadersByDefault(t *testing.T) {
+	handler := CORS(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != "" {
+		t.Errorf("expected no expose headers by default, got %q", got)
+	}
+}
+
 func TestCORS_DownstreamHandlerCalled(t *testing.T) {
 	called := false
 	checker := NewOriginChecker([]string{"excaliframe.com"})
