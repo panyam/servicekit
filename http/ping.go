@@ -75,7 +75,7 @@ func (u *URLWaiter) Run() (success bool, iter int, err error) {
 			log.Println("error creating request: ", err)
 			return false, iter, err
 		}
-		resp, err = Call(req, urlPingHttpClient)
+		resp, err = Call[any](req.Context(), req, WithClient(urlPingHttpClient))
 		if err != nil {
 			log.Println("Error calling URl: ", u.Url, err)
 		} else {
