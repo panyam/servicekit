@@ -35,6 +35,15 @@ Both server and client use a two-layer architecture:
 
 **Key principle**: Control messages (ping/pong/error) are **always JSON** at the transport layer, regardless of what codec is used for data messages. This ensures consistent communication even with binary protocols.
 
+## Recent Changes (2026-05-20)
+
+### Connect → gRPC Stream Bridge (Issue #30)
+Added `connectbridge` package with `ConnectStreamBridge[T]`:
+- Wraps `*connect.ServerStream[T]` so it satisfies `grpc.ServerStreamingServer[T]`
+- Lets a Connect handler delegate a server-streaming RPC to a gRPC-shape service impl
+- Pushdown from lilbattle (origin) and iplane (copied); both now consume servicekit
+- Metadata methods are no-ops in v1; header/trailer propagation deferred until needed
+
 ## Recent Changes (2026-04-02)
 
 ### SSE Connection Support (Issue #6)
@@ -171,6 +180,7 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
 | `http/streamable.go` | StreamableServe for POST-that-optionally-streams (MCP 2025-03-26) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
+| `connectbridge/bridge.go` | ConnectStreamBridge[T] — Connect ServerStream → gRPC ServerStreamingServer adapter |
 | `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |
 | `cmd/grpcws-demo/` | Multiplayer game demo with GameHub |

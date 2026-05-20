@@ -3,6 +3,7 @@ module github.com/panyam/servicekit
 go 1.25.0
 
 require (
+	connectrpc.com/connect v1.19.2
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/panyam/gocurrent v0.1.1
