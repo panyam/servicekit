@@ -1,13 +1,14 @@
 # ServiceKit
 
 ## Version
-0.0.15
+0.1.2
 
 ## Provides
 - websocket-infrastructure: Production-grade WebSocket connection management
 - generic-connection: Generic BaseConn[I, O] for type-safe message handling
 - codec-system: Built-in codecs (JSON, TypedJSON, ProtoJSON, BinaryProto)
 - grpc-over-websocket: gRPC streaming over WebSocket via grpcws package
+- connect-to-grpc-bridge: ConnectStreamBridge[T] adapts *connect.ServerStream[T] to grpc.ServerStreamingServer[T] via connectbridge package
 - http-middleware: Guard, RateLimiter, ConnLimiter, BodyLimiter, OriginChecker, CORS, Recovery, RequestLogger, RequestID, HealthCheck
 - server-timeouts: ApplyDefaults helper for sensible http.Server timeout defaults
 - sse-connection: SSEConn[O] for server-sent event connections with keepalive and codec support
@@ -33,7 +34,7 @@ newstack/servicekit/master
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/servicekit 0.0.15
+require github.com/panyam/servicekit 0.1.2
 
 // Local development
 replace github.com/panyam/servicekit => ~/newstack/servicekit/master

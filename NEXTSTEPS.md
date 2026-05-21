@@ -28,6 +28,7 @@
 - [x] Add SSE connection type: SSEConn[O], SSEHub[O] (issue #6)
 - [x] Add graceful shutdown helper: ListenAndServeGraceful (issue #7)
 - [x] Add Streamable HTTP handler: StreamableServe (issue #8)
+- [x] Add ConnectStreamBridge[T] for Connect ↔ gRPC stream adapter (issue #30)
 - [ ] Add metrics export (Prometheus)
 - [ ] Add OpenTelemetry tracing support
 - [ ] Consider grpc-gateway integration for hybrid deployments
