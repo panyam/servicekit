@@ -222,6 +222,10 @@ entities:
     kind: func
     role: LSP/MCP-stdio Content-Length message framing over byte streams.
     why: Tolerates and ignores non-Content-Length headers (e.g. LSP's optional Content-Type); io.EOF on empty reader = clean shutdown.
+  - name: RPCConn / NewRPCConn
+    kind: type
+    role: Bidirectional JSON-RPC 2.0 connection over Content-Length framed streams; Call/Notify + a peer-request handler, with id-based response correlation.
+    why: The layer above WriteFrame/ReadFrame. LSP clients and MCP stdio clients each hand-roll request/response correlation; this lets them share one conn.
   - name: ResolveURL
     kind: func
     role: Resolve a URL reference against a base per RFC 3986.
