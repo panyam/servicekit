@@ -298,3 +298,93 @@ func waitForServer(t *testing.T, addr string, timeout time.Duration) {
 	}
 	t.Fatalf("Server at %s not ready after %v", addr, timeout)
 }
+
+// TestGracefulShutdown_WithListener verifies that a caller-supplied listener
+// is served directly, so the port is already accepting connections the moment
+// net.Listen returns — before ListenAndServeGraceful is even called.
+//
+// This is the start-up race fix: the other tests in this file must poll with
+// waitForServer because the bind happens inside a goroutine they cannot
+// observe. Here the bind is caller-owned, so the test dials immediately with
+// no polling and no sleep.
+func TestGracefulShutdown_WithListener(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	addr := ln.Addr().String()
+
+	srv := &http.Server{
+		// Deliberately left empty to prove WithListener wins over srv.Addr.
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- ListenAndServeGraceful(srv, WithListener(ln), WithContext(ctx))
+	}()
+
+	// No waitForServer / no sleep: the listener was bound before the goroutine
+	// started, so this connection must succeed on the first attempt.
+	resp, err := http.Get("http://" + addr)
+	if err != nil {
+		t.Fatalf("immediate Get on pre-bound listener failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTeapot {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusTeapot)
+	}
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("Expected nil error on clean shutdown, got: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timed out waiting for graceful shutdown")
+	}
+
+	// Shutdown must have closed the caller's listener.
+	if _, err := http.Get("http://" + addr); err == nil {
+		t.Error("expected connection failure after shutdown; listener still accepting")
+	}
+}
+
+// TestGracefulShutdown_WithListenerPortZero verifies the :0 case — the caller
+// reads the kernel-assigned port off the listener before serving starts,
+// which is impossible when ListenAndServeGraceful owns the bind.
+func TestGracefulShutdown_WithListenerPortZero(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	if port == 0 {
+		t.Fatal("expected a kernel-assigned port, got 0")
+	}
+
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- ListenAndServeGraceful(srv, WithListener(ln), WithContext(ctx))
+	}()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatalf("Get on :0-assigned port %d failed: %v", port, err)
+	}
+	resp.Body.Close()
+
+	cancel()
+	<-errCh
+}

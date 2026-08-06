@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,6 +23,7 @@ type gracefulConfig struct {
 	signals      []os.Signal
 	onShutdown   []func()
 	ctx          context.Context
+	listener     net.Listener
 }
 
 func defaultGracefulConfig() *gracefulConfig {
@@ -66,6 +68,32 @@ func WithOnShutdown(fn func()) GracefulOption {
 	}
 }
 
+// WithListener supplies an already-bound listener to serve on, instead of
+// having ListenAndServeGraceful bind srv.Addr itself.
+//
+// This exists so callers can eliminate the start-up race: bind first, then
+// hand the listener over. Once net.Listen has returned, the port is accepting
+// connections, so a caller that starts the server in a goroutine no longer
+// has to sleep-and-hope before dialing it.
+//
+// It also makes port :0 usable — the caller reads the kernel-assigned port off
+// ln.Addr() before serving begins.
+//
+// srv.Addr is ignored when a listener is set. Closing the listener is handled
+// by srv.Shutdown during the normal drain.
+//
+// Example:
+//
+//	ln, err := net.Listen("tcp", ":0")
+//	if err != nil { return err }
+//	go gohttp.ListenAndServeGraceful(srv, gohttp.WithListener(ln))
+//	// ln.Addr() is bound and accepting right here — no sleep needed.
+func WithListener(ln net.Listener) GracefulOption {
+	return func(c *gracefulConfig) {
+		c.listener = ln
+	}
+}
+
 // WithContext sets a parent context. Shutdown is triggered when this context
 // is cancelled, in addition to OS signals. This is useful for programmatic
 // shutdown in tests or when embedding the server in a larger application.
@@ -83,8 +111,12 @@ func WithContext(ctx context.Context) GracefulOption {
 // It blocks until a shutdown signal is received (OS signal or context cancellation),
 // then drains active connections within the configured timeout.
 //
+// By default it binds srv.Addr itself. Pass WithListener to serve on a
+// listener you have already bound, which removes the start-up race for
+// callers that run this in a goroutine.
+//
 // Shutdown lifecycle:
-//  1. Start srv.ListenAndServe() in a goroutine
+//  1. Start srv.ListenAndServe() — or srv.Serve(ln) with WithListener — in a goroutine
 //  2. Block until: OS signal, parent context cancellation, or server error
 //  3. Call OnShutdown callbacks (e.g. SSEHub.CloseAll()) — connections still open
 //  4. Call srv.Shutdown() with drain timeout — waits for in-flight handlers
@@ -110,7 +142,15 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 	// Channel for server startup errors (port in use, etc.)
 	serverErr := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		// A caller-supplied listener is already bound, so Serve skips the
+		// bind entirely — see WithListener.
+		var err error
+		if cfg.listener != nil {
+			err = srv.Serve(cfg.listener)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()
