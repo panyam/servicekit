@@ -7,6 +7,19 @@ import (
 )
 
 // statusRecorder wraps http.ResponseWriter to capture the status code.
+//
+// It deliberately re-exposes the capabilities the wrap would otherwise
+// hide. http.ResponseWriter carries only Header/Write/WriteHeader, so a
+// plain embedding silently strips http.Flusher, and any handler that
+// type-asserts for it stops streaming. That is invisible in a test that
+// only checks the body, because the same bytes still arrive; they just
+// arrive all at once, at the end.
+//
+// Unwrap() is the modern half, letting http.ResponseController reach the
+// original writer for flushing, hijacking and deadlines. Flush() is the
+// half that real callers need, because httputil.ReverseProxy and most
+// SSE code assert on http.Flusher directly rather than going through a
+// ResponseController.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -15,6 +28,18 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+// Unwrap returns the wrapped writer for http.ResponseController.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
+// Flush forwards to the underlying writer when it can flush, and is a
+// no-op when it cannot. Without this, wrapping a handler in RequestLogger
+// converts every streamed response into a buffered one.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // RequestLogger logs HTTP requests with method, path, status, duration, and client IP.
