@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -15,21 +17,31 @@ import (
 // Graceful Shutdown Configuration
 // ============================================================================
 
+// ErrDrainTimeout is returned by ListenAndServeGraceful when in-flight
+// handlers were still running after the drain timeout. By then the helper has
+// called srv.Close, so the remaining connections are already gone, and the
+// caller can still run its own cleanup. It wraps context.DeadlineExceeded, so
+// callers that check for that keep working. Startup failures (port in use and
+// so on) are returned as they are and never match ErrDrainTimeout.
+var ErrDrainTimeout = fmt.Errorf("servicekit/http: drain timeout exceeded, remaining connections closed: %w", context.DeadlineExceeded)
+
 // GracefulOption configures ListenAndServeGraceful behavior.
 type GracefulOption func(*gracefulConfig)
 
 type gracefulConfig struct {
-	drainTimeout time.Duration
-	signals      []os.Signal
-	onShutdown   []func()
-	ctx          context.Context
-	listener     net.Listener
+	drainTimeout   time.Duration
+	signals        []os.Signal
+	onShutdown     []func()
+	ctx            context.Context
+	listener       net.Listener
+	cancelRequests bool
 }
 
 func defaultGracefulConfig() *gracefulConfig {
 	return &gracefulConfig{
-		drainTimeout: 30 * time.Second,
-		signals:      []os.Signal{syscall.SIGTERM, syscall.SIGINT},
+		drainTimeout:   30 * time.Second,
+		signals:        []os.Signal{syscall.SIGTERM, syscall.SIGINT},
+		cancelRequests: true,
 	}
 }
 
@@ -94,6 +106,27 @@ func WithListener(ln net.Listener) GracefulOption {
 	}
 }
 
+// WithCancelRequests controls whether request contexts are cancelled when
+// shutdown starts. Default: true.
+//
+// When on, every r.Context() is cancelled right after the OnShutdown callbacks
+// and before srv.Shutdown begins draining. Handlers that wait on
+// r.Context().Done(), such as a Connect server stream, an SSE feed outside
+// SSEHub, or a long-poll, then return straight away instead of holding the
+// drain open until the timeout. A caller-set srv.BaseContext keeps its values;
+// the helper derives from it rather than replacing it.
+//
+// The cost is that short requests in flight at shutdown see their context
+// cancelled too, so a handler that passes r.Context() to a database call can
+// have that call aborted. Pass false to let those requests finish within the
+// drain timeout instead; long-lived handlers then hold the drain until it
+// times out and ListenAndServeGraceful returns ErrDrainTimeout.
+func WithCancelRequests(enabled bool) GracefulOption {
+	return func(c *gracefulConfig) {
+		c.cancelRequests = enabled
+	}
+}
+
 // WithContext sets a parent context. Shutdown is triggered when this context
 // is cancelled, in addition to OS signals. This is useful for programmatic
 // shutdown in tests or when embedding the server in a larger application.
@@ -118,9 +151,15 @@ func WithContext(ctx context.Context) GracefulOption {
 // Shutdown lifecycle:
 //  1. Start srv.ListenAndServe() — or srv.Serve(ln) with WithListener — in a goroutine
 //  2. Block until: OS signal, parent context cancellation, or server error
-//  3. Call OnShutdown callbacks (e.g. SSEHub.CloseAll()) — connections still open
-//  4. Call srv.Shutdown() with drain timeout — waits for in-flight handlers
-//  5. Return nil on clean shutdown, or the error
+//  3. Stop catching signals, so a second Ctrl-C kills the process
+//  4. Call OnShutdown callbacks (e.g. SSEHub.CloseAll()) — connections still open
+//  5. Cancel request contexts (see WithCancelRequests)
+//  6. Call srv.Shutdown() with drain timeout — waits for in-flight handlers
+//  7. If the drain times out, call srv.Close() and return ErrDrainTimeout
+//  8. Otherwise return nil on clean shutdown, or the error
+//
+// With request cancellation on (the default), the helper sets srv.BaseContext
+// before serving, wrapping any BaseContext the caller had set.
 //
 // Example:
 //
@@ -137,6 +176,11 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 	cfg := defaultGracefulConfig()
 	for _, o := range opts {
 		o(cfg)
+	}
+
+	cancelRequests := func() {}
+	if cfg.cancelRequests {
+		cancelRequests = wrapBaseContext(srv)
 	}
 
 	// Channel for server startup errors (port in use, etc.)
@@ -158,7 +202,6 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 	// Signal channel
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, cfg.signals...)
-	defer signal.Stop(sigChan)
 
 	// Parent context channel (nil if no context provided)
 	var ctxDone <-chan struct{}
@@ -170,10 +213,13 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 	select {
 	case err := <-serverErr:
 		// Server failed to start
+		signal.Stop(sigChan)
 		return err
 	case sig := <-sigChan:
+		signal.Stop(sigChan)
 		log.Printf("Received signal %v, shutting down...", sig)
 	case <-ctxDone:
+		signal.Stop(sigChan)
 		log.Println("Context cancelled, shutting down...")
 	}
 
@@ -181,16 +227,39 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 	for _, fn := range cfg.onShutdown {
 		fn()
 	}
+	cancelRequests()
 
 	// Drain active connections
 	drainCtx, cancel := context.WithTimeout(context.Background(), cfg.drainTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(drainCtx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			srv.Close()
+			log.Printf("Drain timed out after %v, closed remaining connections", cfg.drainTimeout)
+			return ErrDrainTimeout
+		}
 		log.Printf("Shutdown error: %v", err)
 		return err
 	}
 
 	log.Println("Server shut down gracefully")
 	return nil
+}
+
+// wrapBaseContext makes every request context on srv cancellable by the
+// returned func, keeping the values of any BaseContext the caller set.
+func wrapBaseContext(srv *http.Server) context.CancelFunc {
+	shutdownCtx, cancel := context.WithCancel(context.Background())
+	parent := srv.BaseContext
+	srv.BaseContext = func(ln net.Listener) context.Context {
+		base := context.Background()
+		if parent != nil {
+			base = parent(ln)
+		}
+		ctx, cancelBase := context.WithCancel(base)
+		context.AfterFunc(shutdownCtx, cancelBase)
+		return ctx
+	}
+	return cancel
 }

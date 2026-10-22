@@ -122,3 +122,22 @@ func TestNilOriginChecker_CheckRequest(t *testing.T) {
 		t.Error("nil checker should allow all requests")
 	}
 }
+
+// A dev server reachable from a phone on the LAN lists its LAN address in the
+// allowlist; that phone's Origin-less requests carry the same address as Host.
+func TestOriginChecker_CheckRequest_NoOrigin_AllowlistedHost(t *testing.T) {
+	c := NewOriginChecker([]string{"192.168.1.10", "*.example.com"})
+	for _, host := range []string{"192.168.1.10:8080", "192.168.1.10", "api.example.com"} {
+		r := httptest.NewRequest("POST", "/mcp", nil)
+		r.Host = host
+		if !c.CheckRequest(r) {
+			t.Errorf("CheckRequest should allow allowlisted Host %q when Origin absent", host)
+		}
+	}
+
+	r := httptest.NewRequest("POST", "/mcp", nil)
+	r.Host = "192.168.1.11:8080"
+	if c.CheckRequest(r) {
+		t.Error("CheckRequest should still reject a Host outside the allowlist")
+	}
+}
