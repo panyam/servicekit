@@ -1,0 +1,38 @@
+name: Publish npm
+
+# Publishes clients/typescript as @panyam/servicekit-client when a release tag
+# is pushed. The Go module and the TS client share one version (CAPABILITIES.md's
+# "## Version"), so tag v0.1.8 publishes @panyam/servicekit-client@0.1.8.
+# Run it by hand (workflow_dispatch, ref = an existing tag) to publish an older tag.
+#
+# npm side, once:
+#   npm trust github @panyam/servicekit-client --repo panyam/servicekit --file publish-npm.yml --allow-publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: scripts/check-versions.sh "$GITHUB_REF_NAME"
+      - run: npm ci
+        working-directory: clients/typescript
+      - run: npm test
+        working-directory: clients/typescript
+
+  publish:
+    needs: test
+    uses: ./.github/workflows/npm-publish.yml
+    with:
+      working-directory: clients/typescript
