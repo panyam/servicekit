@@ -5,7 +5,10 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.1.8] - 2026-10-23
+
+The TS client now shares the Go module's version and publishes from CI
+(PR 39). No Go changes.
 
 ### Changed
 - `@panyam/servicekit-client` now carries the Go module's version (it was
