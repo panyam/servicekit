@@ -17,6 +17,8 @@ name: npm publish (shared)
 #       uses: panyam/servicekit/.github/workflows/npm-publish.yml@master
 #       with:
 #         working-directory: ts
+#         # package-manager: pnpm      # for a pnpm repo
+#         # test-command: pnpm test    # to test here instead of in a caller job
 #
 # On npm, the package's trusted publisher names the CALLER's repo and workflow
 # file, not this one:
@@ -38,6 +40,18 @@ on:
         description: Node version. Trusted publishing needs npm 11.5.1+, which the job installs regardless.
         type: string
         default: '24'
+      package-manager:
+        description: How to install and build, "npm" (npm ci) or "pnpm" (pnpm install --frozen-lockfile --ignore-scripts; pnpm 12 refuses unapproved dependency build scripts, and the build runs as its own step). Publishing always uses npm.
+        type: string
+        default: npm
+      pnpm-version:
+        description: pnpm version, when package-manager is pnpm.
+        type: string
+        default: '12'
+      test-command:
+        description: Optional command run after the build, e.g. "pnpm test". Leave empty when the caller tests in its own job.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -51,6 +65,10 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@v4
+      - if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -67,12 +85,24 @@ jobs:
             echo "tag ${TAG} but package.json is ${have}" >&2
             exit 1
           fi
-      - run: npm ci
+      - name: Install
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          case "$PM" in
+            npm) npm ci ;;
+            pnpm) pnpm install --frozen-lockfile --ignore-scripts ;;
+            *) echo "package-manager must be npm or pnpm, got $PM" >&2; exit 1 ;;
+          esac
       - run: npm run build --if-present
+      - if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
       - name: Refuse to ship test files
         run: |
           node -e '
-            const [p] = JSON.parse(require("child_process").execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }));
+            // npm 10/11 print an array of packs, npm 12 an object keyed by package name.
+            const out = JSON.parse(require("child_process").execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }));
+            const p = Array.isArray(out) ? out[0] : Object.values(out)[0];
             const tests = p.files.map((f) => f.path).filter((f) => /\.test\./.test(f));
             if (tests.length) { console.error("tarball ships test files:\n  " + tests.join("\n  ")); process.exit(1); }
             console.log(p.name + "@" + p.version + ": " + p.files.length + " files");
