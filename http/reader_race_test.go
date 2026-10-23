@@ -13,17 +13,9 @@ import (
 
 // TestWebSocketReaderRace_RapidConnectDisconnect rapidly connects and
 // disconnects WebSocket clients to stress the conc.Reader teardown path.
-// This reproduces a race condition in gocurrent's Reader where cleanup()
-// and the reader goroutine race on a channel during connection close.
-//
-// See: https://github.com/panyam/gocurrent/issues/4
-//
-// The race is between:
-//   - Reader.cleanup() at reader.go:161 (recvDirect on channel)
-//   - Reader.start.func1.1() at reader.go:137 (chansend on same channel)
-//
-// This test is expected to FAIL with -race until gocurrent fixes the Reader
-// channel race. Run with: go test -run TestWebSocketReaderRace -race -count=1
+// Regression test for https://github.com/panyam/gocurrent/issues/4, where
+// Reader.cleanup() raced the reader goroutine on its message channel during
+// connection close. Fixed in gocurrent v0.0.12; CI runs this under -race.
 func TestWebSocketReaderRace_RapidConnectDisconnect(t *testing.T) {
 	router := mux.NewRouter()
 	handler := &EchoHandler{}

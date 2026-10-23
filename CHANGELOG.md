@@ -20,7 +20,8 @@ and are not back-filled here.
   against `SendPing`.
 
 ### Added
-- CI runs `go vet` and `go test -race` on the Go module.
+- CI runs `go vet` and `go test -race` on the Go module, and fails on files
+  `gofmt` would change (#43).
 
 ## [v0.1.9] - 2026-10-23
 

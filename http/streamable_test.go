@@ -2,8 +2,8 @@ package http
 
 import (
 	"bufio"
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"

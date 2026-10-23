@@ -1,5 +1,10 @@
 # ServiceKit Enhancement Plan
 
+> **Historical.** This is the original design plan for the codec and gRPC-WS
+> work, kept for its rationale. Code snippets here are not kept current; see
+> [ARCHITECTURE.md](ARCHITECTURE.md) and [grpcws/README.md](grpcws/README.md)
+> for the current API.
+
 ## Overview
 
 This plan outlines the enhancement of ServiceKit to:

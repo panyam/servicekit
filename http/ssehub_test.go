@@ -31,9 +31,9 @@ func newMockResponseWriter() *mockResponseWriter {
 	}
 }
 
-func (m *mockResponseWriter) Header() http.Header         { return m.headers }
-func (m *mockResponseWriter) WriteHeader(statusCode int)   { m.statusCode = statusCode }
-func (m *mockResponseWriter) Flush()                       {}
+func (m *mockResponseWriter) Header() http.Header        { return m.headers }
+func (m *mockResponseWriter) WriteHeader(statusCode int) { m.statusCode = statusCode }
+func (m *mockResponseWriter) Flush()                     {}
 func (m *mockResponseWriter) Write(b []byte) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -300,4 +300,3 @@ func TestSSEHubConcurrentAccess(t *testing.T) {
 		conn.OnClose()
 	}
 }
-
