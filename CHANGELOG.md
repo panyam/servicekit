@@ -5,6 +5,23 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [v0.1.9] - 2026-10-23
+
+First release of `@panyam/servicekit-client` through CI. v0.1.8's publish
+run failed before uploading, so 0.1.8 is not on npm.
+
+### Changed
+- grpc v1.82.1 and protobuf v1.36.11 (PR 34), with golang.org/x/net and
+  x/sys patch updates.
+
+### Fixed
+- The shared `npm-publish.yml` reads npm 12's `npm pack --json` output, an
+  object keyed by package name where npm 10/11 printed an array (PR 40).
+
+### Added
+- `npm-publish.yml` takes `package-manager` (`npm` or `pnpm`), `pnpm-version`
+  and `test-command`, so pnpm repos can call it (PR 40).
+
 ## [v0.1.8] - 2026-10-23
 
 The TS client now shares the Go module's version and publishes from CI
