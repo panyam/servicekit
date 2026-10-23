@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [v0.1.11] - 2026-10-23
+
+Dependency patch release for five Dependabot alerts on the Go module (two
+high, three moderate). No API changes.
+
+### Fixed
+- grpc v1.83.2 (from v1.82.1), gorilla/websocket v1.5.3 (from v1.5.0), and
+  golang.org/x/net v0.58.0 with matching x/sys, x/text and genproto updates
+  (PR 45).
+
 ## [v0.1.10] - 2026-10-23
 
 Fixes the data race `go test -race` reported on every grpcws WebSocket close,
