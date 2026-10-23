@@ -81,8 +81,12 @@ func (c *OriginChecker) Check(origin string) bool {
 	if err != nil {
 		return false
 	}
-	host := u.Hostname()
+	return c.allowsHost(u.Hostname())
+}
 
+// allowsHost reports whether a bare hostname (no scheme or port) matches the
+// allowlist.
+func (c *OriginChecker) allowsHost(host string) bool {
 	for _, p := range c.allowed {
 		if p.localhost {
 			if host == "localhost" || host == "127.0.0.1" || host == "::1" {
@@ -139,7 +143,9 @@ func NewLocalhostOriginChecker() *OriginChecker {
 //
 //   - Origin header present → delegates to Check(origin)
 //   - Origin absent, Host is localhost → allow (local dev tools like curl)
-//   - Origin absent, Host is remote → reject (potential DNS rebinding)
+//   - Origin absent, Host matches the allowlist → allow (e.g. a LAN address
+//     listed so a phone can reach a dev server)
+//   - Origin absent, any other Host → reject (potential DNS rebinding)
 //   - No Origin or Host info → allow (same-origin or non-browser client)
 //
 // Nil-safe: calling on a nil *OriginChecker allows all requests.
@@ -162,12 +168,18 @@ func (c *OriginChecker) CheckRequest(r *http.Request) bool {
 		return true // No origin info to validate
 	}
 
-	return isLocalhostHost(host)
+	return isLocalhostHost(host) || c.allowsHost(stripPort(host))
 }
 
 // isLocalhostHost checks if a Host header value is a localhost variant.
 // Strips the port if present before comparing.
 func isLocalhostHost(host string) bool {
+	h := stripPort(host)
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
+
+// stripPort removes any port and IPv6 brackets from a Host header value.
+func stripPort(host string) string {
 	h := host
 	// Strip port. Handle IPv6 [::1]:port format.
 	if idx := strings.LastIndex(h, ":"); idx != -1 {
@@ -179,5 +191,5 @@ func isLocalhostHost(host string) bool {
 	// Strip brackets from IPv6
 	h = strings.TrimPrefix(h, "[")
 	h = strings.TrimSuffix(h, "]")
-	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+	return h
 }

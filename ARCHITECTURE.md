@@ -107,11 +107,16 @@ HTTP Request → SSEHandler.Validate() → SSEConn created
 
 ```
 Start srv.ListenAndServe() → Block on signal/context
+    → signal.Stop (a second Ctrl-C now kills the process)
     → OnShutdown callbacks (SSEHub.CloseAll, etc.)
-    → srv.Shutdown(drainCtx) → Return
+    → cancel request contexts (WithCancelRequests, default on)
+    → srv.Shutdown(drainCtx)
+    → on drain timeout: srv.Close(), return ErrDrainTimeout
 ```
 
 Key design: OnShutdown callbacks run BEFORE `srv.Shutdown()` so they can send goodbye events to SSE/WS clients while connections are still open. SSE connections need explicit close (via `hub.CloseAll()`) to unblock `SSEServe` select loops. WS connections drain automatically when `srv.Shutdown()` closes TCP connections.
+
+Request contexts are cancelled after the callbacks, through a wrapped `srv.BaseContext`, so handlers that block on `r.Context().Done()` (Connect server streams, SSE outside `SSEHub`, long-polls) return instead of holding the drain for the full timeout. `WithCancelRequests(false)` turns this off for servers whose short requests must not see a cancelled context mid-flight.
 
 ### Streamable HTTP
 

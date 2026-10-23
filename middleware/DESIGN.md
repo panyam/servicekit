@@ -59,7 +59,7 @@ entities:
   - name: OriginChecker.CheckRequest
     kind: func
     role: Full DNS-rebinding-protection check using Origin then falling back to the Host header.
-    why: When Origin is absent it allows only localhost Hosts, blocking remote DNS-rebinding while still letting local CLI tools (curl) through.
+    why: When Origin is absent it allows localhost Hosts and Hosts on the allowlist (e.g. a LAN address listed for a phone), blocking DNS-rebinding hosts while still letting local CLI tools (curl) through.
   - name: OriginChecker.Middleware
     kind: func
     role: HTTP middleware that rejects disallowed origins on WebSocket upgrades only.
@@ -87,7 +87,7 @@ entities:
   - name: RequestLogger
     kind: func
     role: Middleware logging method/path/status/duration/IP via slog, with per-path skip list.
-    why: Wraps ResponseWriter in statusRecorder to capture the status code; auto-includes request_id when present, and skips noisy paths like /healthz.
+    why: Wraps ResponseWriter in statusRecorder to capture the status code (forwarding Flush and Hijack so SSE and WebSocket upgrades still work); auto-includes request_id when present, and skips noisy paths like /healthz.
   - name: RequestID
     kind: struct
     role: Middleware that propagates an incoming X-Request-Id or generates a new 16-byte hex ID.

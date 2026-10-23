@@ -881,8 +881,11 @@ err := gohttp.ListenAndServeGraceful(srv,
 - `WithOnShutdown(fn)` — callbacks invoked before drain (SSEHub.CloseAll, flush logs, etc.)
 - `WithSignals(sigs...)` — OS signals to catch (default SIGTERM, SIGINT)
 - `WithContext(ctx)` — parent context; shutdown on cancellation
+- `WithCancelRequests(bool)` — cancel every `r.Context()` once shutdown starts (default true)
 
 OnShutdown callbacks run **before** `srv.Shutdown()` so they can send goodbye events while connections are still open.
+
+Right after the callbacks, request contexts are cancelled, so handlers waiting on `r.Context().Done()` (streams, long-polls) return and the drain finishes quickly. Pass `WithCancelRequests(false)` if in-flight requests should keep their context until the drain timeout. If the drain times out, the remaining connections are closed and `ErrDrainTimeout` is returned. Signal handling stops as soon as shutdown begins, so a second Ctrl-C kills the process.
 
 ## Streamable HTTP
 

@@ -1,0 +1,118 @@
+name: npm publish (shared)
+
+# Reusable workflow that publishes one npm package with npm trusted publishing
+# (OIDC), so callers need no NPM_TOKEN secret. Run repo-specific tests in a job
+# of the caller and make the publish job depend on it.
+#
+# Caller, e.g. .github/workflows/publish-npm.yml:
+#
+#   on:
+#     push:
+#       tags: ['v*']
+#   permissions:
+#     contents: read
+#     id-token: write
+#   jobs:
+#     publish:
+#       uses: panyam/servicekit/.github/workflows/npm-publish.yml@master
+#       with:
+#         working-directory: ts
+#         # package-manager: pnpm      # for a pnpm repo
+#         # test-command: pnpm test    # to test here instead of in a caller job
+#
+# On npm, the package's trusted publisher names the CALLER's repo and workflow
+# file, not this one:
+#
+#   npm trust github <package> --repo <owner>/<repo> --file publish-npm.yml --allow-publish
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Directory holding the package.json to publish.
+        type: string
+        default: .
+      tag-prefix:
+        description: Prefix stripped from the tag before comparing it with package.json's version (e.g. "v" or "client-v").
+        type: string
+        default: v
+      node-version:
+        description: Node version. Trusted publishing needs npm 11.5.1+, which the job installs regardless.
+        type: string
+        default: '24'
+      package-manager:
+        description: How to install and build, "npm" (npm ci) or "pnpm" (pnpm install --frozen-lockfile --ignore-scripts; pnpm 12 refuses unapproved dependency build scripts, and the build runs as its own step). Publishing always uses npm.
+        type: string
+        default: npm
+      pnpm-version:
+        description: pnpm version, when package-manager is pnpm.
+        type: string
+        default: '12'
+      test-command:
+        description: Optional command run after the build, e.g. "pnpm test". Leave empty when the caller tests in its own job.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - name: Check the tag matches package.json
+        env:
+          TAG: ${{ github.ref_name }}
+          PREFIX: ${{ inputs.tag-prefix }}
+        run: |
+          want="${TAG#"$PREFIX"}"
+          have="$(node -p "require('./package.json').version")"
+          if [ "$want" != "$have" ]; then
+            echo "tag ${TAG} but package.json is ${have}" >&2
+            exit 1
+          fi
+      - name: Install
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          case "$PM" in
+            npm) npm ci ;;
+            pnpm) pnpm install --frozen-lockfile --ignore-scripts ;;
+            *) echo "package-manager must be npm or pnpm, got $PM" >&2; exit 1 ;;
+          esac
+      - run: npm run build --if-present
+      - if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+      - name: Refuse to ship test files
+        run: |
+          node -e '
+            // npm 10/11 print an array of packs, npm 12 an object keyed by package name.
+            const out = JSON.parse(require("child_process").execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }));
+            const p = Array.isArray(out) ? out[0] : Object.values(out)[0];
+            const tests = p.files.map((f) => f.path).filter((f) => /\.test\./.test(f));
+            if (tests.length) { console.error("tarball ships test files:\n  " + tests.join("\n  ")); process.exit(1); }
+            console.log(p.name + "@" + p.version + ": " + p.files.length + " files");
+          '
+      - name: Publish, unless this version is already on npm
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          v="$(node -p "require('./package.json').version")"
+          if npm view "${name}@${v}" version >/dev/null 2>&1; then
+            echo "${name}@${v} is already published"
+            exit 0
+          fi
+          npm publish --provenance --access public

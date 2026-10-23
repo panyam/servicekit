@@ -724,7 +724,7 @@ var ServiceKit = (() => {
         streamController.enqueue(encoder.encode(text));
       }
     };
-    const mockFetch = async (input, init) => {
+    const mockFetch = (async (input, init) => {
       capturedUrl = typeof input === "string" ? input : input.toString();
       capturedMethod = init?.method ?? "GET";
       capturedBody = typeof init?.body === "string" ? init.body : void 0;
@@ -751,7 +751,7 @@ var ServiceKit = (() => {
         status: 200,
         headers: { "Content-Type": contentType }
       });
-    };
+    });
     const controller = {
       simulateMessage(data) {
         enqueue(`data: ${JSON.stringify(data)}
