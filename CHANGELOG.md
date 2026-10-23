@@ -5,7 +5,9 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.1.7] - 2026-10-23
+
+WebSocket upgrades work behind `RequestLogger` (PR 38).
 
 ### Fixed
 - WebSocket upgrades work behind `RequestLogger` again. Its `statusRecorder`
