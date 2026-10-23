@@ -233,8 +233,8 @@ func TestStreamMetrics_IncrementSent(t *testing.T) {
 		}
 	}
 
-	if m.MsgsSent != 5 {
-		t.Errorf("MsgsSent = %v, want 5", m.MsgsSent)
+	if m.Sent() != 5 {
+		t.Errorf("Sent() = %v, want 5", m.Sent())
 	}
 }
 
@@ -248,8 +248,8 @@ func TestStreamMetrics_IncrementReceived(t *testing.T) {
 		}
 	}
 
-	if m.MsgsReceived != 3 {
-		t.Errorf("MsgsReceived = %v, want 3", m.MsgsReceived)
+	if m.Received() != 3 {
+		t.Errorf("Received() = %v, want 3", m.Received())
 	}
 }
 

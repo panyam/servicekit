@@ -116,7 +116,7 @@ func (c *BidiStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) er
 func (c *BidiStreamConn[Req, Resp, Stream]) OnClose() {
 	c.baseGRPCConn.OnClose()
 	log.Printf("BidiStreamConn %s closed: sent %d, received %d messages",
-		c.ConnId(), c.metrics.MsgsSent, c.metrics.MsgsReceived)
+		c.ConnId(), c.metrics.Sent(), c.metrics.Received())
 }
 
 // ============================================================================

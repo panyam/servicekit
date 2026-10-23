@@ -92,7 +92,7 @@ type BaseConn[I any, O any] struct {
     Writer    *conc.Writer[OutgoingMessage[O]]
     NameStr   string
     ConnIdStr string
-    PingId    int64
+    PingId    atomic.Int64
 }
 ```
 

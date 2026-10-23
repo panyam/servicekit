@@ -92,7 +92,7 @@ func (c *ServerStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) 
 // OnClose cancels the gRPC stream and cleans up
 func (c *ServerStreamConn[Req, Resp, Stream]) OnClose() {
 	c.baseGRPCConn.OnClose()
-	log.Printf("ServerStreamConn %s closed: sent %d messages", c.ConnId(), c.metrics.MsgsSent)
+	log.Printf("ServerStreamConn %s closed: sent %d messages", c.ConnId(), c.metrics.Sent())
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 	conc "github.com/panyam/gocurrent"
@@ -66,8 +67,10 @@ type BaseConn[I any, O any] struct {
 	// Auto-generated if not set.
 	ConnIdStr string
 
-	// PingId tracks the current ping sequence number.
-	PingId int64
+	// PingId tracks the current ping sequence number. SendPing advances it on
+	// the connection loop while DebugInfo and embedders may read it from other
+	// goroutines, so it is atomic and BaseConn must not be copied after use.
+	PingId atomic.Int64
 
 	// wsConn is the underlying WebSocket connection.
 	// Set during OnStart.
@@ -95,7 +98,7 @@ func (b *BaseConn[I, O]) DebugInfo() any {
 	info := map[string]any{
 		"name":   b.NameStr,
 		"connId": b.ConnIdStr,
-		"pingId": b.PingId,
+		"pingId": b.PingId.Load(),
 	}
 	if b.Writer != nil {
 		info["writer"] = b.Writer.DebugInfo()
@@ -183,11 +186,11 @@ func (b *BaseConn[I, O]) writePing(conn *websocket.Conn, ping *PingData) error {
 // SendPing sends a ping message through the Writer.
 // This ensures thread-safe writes by going through the serialized Writer.
 func (b *BaseConn[I, O]) SendPing() error {
-	b.PingId++
+	pingId := b.PingId.Add(1)
 	if b.Writer != nil {
 		b.Writer.Send(OutgoingMessage[O]{
 			Ping: &PingData{
-				PingId: b.PingId,
+				PingId: pingId,
 				ConnId: b.ConnId(),
 				Name:   b.Name(),
 			},

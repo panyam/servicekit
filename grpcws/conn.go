@@ -128,21 +128,37 @@ type BidiStream[Req proto.Message, Resp proto.Message] interface {
 // Connection Metrics
 // ============================================================================
 
-// StreamMetrics tracks connection statistics
+// StreamMetrics tracks connection statistics.
+//
+// The stream goroutines update the counters while the connection is open, and
+// OnClose reads them as the connection shuts down, so the counters are atomics.
+// A StreamMetrics must not be copied after first use.
 type StreamMetrics struct {
 	ConnectedAt  time.Time
-	MsgsSent     int64
-	MsgsReceived int64
+	MsgsSent     atomic.Int64
+	MsgsReceived atomic.Int64
 }
 
-// IncrementSent atomically increments the sent counter
+// IncrementSent atomically increments the sent counter and returns the new count.
 func (m *StreamMetrics) IncrementSent() int64 {
-	return atomic.AddInt64(&m.MsgsSent, 1)
+	return m.MsgsSent.Add(1)
 }
 
-// IncrementReceived atomically increments the received counter
+// IncrementReceived atomically increments the received counter and returns the new count.
 func (m *StreamMetrics) IncrementReceived() int64 {
-	return atomic.AddInt64(&m.MsgsReceived, 1)
+	return m.MsgsReceived.Add(1)
+}
+
+// Sent returns the number of messages sent so far. Safe to call while the
+// stream goroutines are still sending.
+func (m *StreamMetrics) Sent() int64 {
+	return m.MsgsSent.Load()
+}
+
+// Received returns the number of messages received so far. Safe to call while
+// the stream goroutines are still receiving.
+func (m *StreamMetrics) Received() int64 {
+	return m.MsgsReceived.Load()
 }
 
 // ============================================================================
@@ -202,10 +218,9 @@ func (c *baseGRPCConn) OnStart(conn *websocket.Conn) error {
 // SendPing sends a ping using the gRPC-WS ControlMessage envelope format.
 // This overrides BaseConn.SendPing to use the proper envelope protocol.
 func (c *baseGRPCConn) SendPing() error {
-	c.PingId++
 	c.SendOutput(ControlMessage{
 		Type:   TypePing,
-		PingId: c.PingId,
+		PingId: c.PingId.Add(1),
 	})
 	return nil
 }

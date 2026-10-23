@@ -87,7 +87,7 @@ func (c *ClientStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) 
 // OnClose cancels the stream and cleans up
 func (c *ClientStreamConn[Req, Resp, Stream]) OnClose() {
 	c.baseGRPCConn.OnClose()
-	log.Printf("ClientStreamConn %s closed: received %d messages", c.ConnId(), c.metrics.MsgsReceived)
+	log.Printf("ClientStreamConn %s closed: received %d messages", c.ConnId(), c.metrics.Received())
 }
 
 // ============================================================================
