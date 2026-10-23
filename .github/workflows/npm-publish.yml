@@ -41,7 +41,7 @@ on:
         type: string
         default: '24'
       package-manager:
-        description: How to install and build, "npm" (npm ci) or "pnpm" (pnpm install --frozen-lockfile). Publishing always uses npm.
+        description: How to install and build, "npm" (npm ci) or "pnpm" (pnpm install --frozen-lockfile --ignore-scripts; pnpm 12 refuses unapproved dependency build scripts, and the build runs as its own step). Publishing always uses npm.
         type: string
         default: npm
       pnpm-version:
@@ -91,7 +91,7 @@ jobs:
         run: |
           case "$PM" in
             npm) npm ci ;;
-            pnpm) pnpm install --frozen-lockfile ;;
+            pnpm) pnpm install --frozen-lockfile --ignore-scripts ;;
             *) echo "package-manager must be npm or pnpm, got $PM" >&2; exit 1 ;;
           esac
       - run: npm run build --if-present
