@@ -100,10 +100,10 @@ func (s *testClientStream) RecvMsg(m any) error          { return nil }
 // testBidiStream implements BidiStream[*timestamppb.Timestamp, *timestamppb.Timestamp].
 // Combines send capture and receive channel for full-duplex testing.
 type testBidiStream struct {
-	ctx            context.Context
-	sendCh         chan *timestamppb.Timestamp // captures client→server messages
-	recvCh         chan *timestamppb.Timestamp // test→client messages
-	closeSendDone  atomic.Bool
+	ctx           context.Context
+	sendCh        chan *timestamppb.Timestamp // captures client→server messages
+	recvCh        chan *timestamppb.Timestamp // test→client messages
+	closeSendDone atomic.Bool
 }
 
 func (s *testBidiStream) Send(msg *timestamppb.Timestamp) error {
@@ -140,13 +140,13 @@ func (s *testBidiStream) RecvMsg(m any) error          { return nil }
 
 // Compile-time interface checks
 var (
-	_ ServerStream[*timestamppb.Timestamp]                              = (*testServerStream)(nil)
-	_ ServerStream[*timestamppb.Timestamp]                              = (*testErrorServerStream)(nil)
-	_ ClientStream[*timestamppb.Timestamp, *timestamppb.Timestamp]     = (*testClientStream)(nil)
-	_ BidiStream[*timestamppb.Timestamp, *timestamppb.Timestamp]       = (*testBidiStream)(nil)
-	_ grpc.ClientStream                                                 = (*testServerStream)(nil)
-	_ grpc.ClientStream                                                 = (*testClientStream)(nil)
-	_ grpc.ClientStream                                                 = (*testBidiStream)(nil)
+	_ ServerStream[*timestamppb.Timestamp]                         = (*testServerStream)(nil)
+	_ ServerStream[*timestamppb.Timestamp]                         = (*testErrorServerStream)(nil)
+	_ ClientStream[*timestamppb.Timestamp, *timestamppb.Timestamp] = (*testClientStream)(nil)
+	_ BidiStream[*timestamppb.Timestamp, *timestamppb.Timestamp]   = (*testBidiStream)(nil)
+	_ grpc.ClientStream                                            = (*testServerStream)(nil)
+	_ grpc.ClientStream                                            = (*testClientStream)(nil)
+	_ grpc.ClientStream                                            = (*testBidiStream)(nil)
 )
 
 // ============================================================================

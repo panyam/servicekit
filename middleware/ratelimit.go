@@ -11,9 +11,9 @@ import (
 
 // RateLimitConfig controls rate limiting.
 type RateLimitConfig struct {
-	GlobalPerSec float64       // max requests/sec globally (0 = unlimited)
-	PerKeyPerSec float64       // max requests/sec per key (0 = unlimited)
-	PerKeyBurst  int           // burst allowance per key
+	GlobalPerSec  float64       // max requests/sec globally (0 = unlimited)
+	PerKeyPerSec  float64       // max requests/sec per key (0 = unlimited)
+	PerKeyBurst   int           // burst allowance per key
 	KeyLimiterTTL time.Duration // cleanup interval for stale per-key limiters
 }
 

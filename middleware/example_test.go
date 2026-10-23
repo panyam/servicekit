@@ -24,9 +24,9 @@ func ExampleGuard() {
 	// Compose into a Guard chain
 	g := &mw.Guard{}
 	g.Use(
-		oc.Middleware,           // Check origin first
-		rl.Middleware(nil),      // Then rate limit (nil key = use ClientIP)
-		mw.Recovery,             // Catch panics
+		oc.Middleware,      // Check origin first
+		rl.Middleware(nil), // Then rate limit (nil key = use ClientIP)
+		mw.Recovery,        // Catch panics
 	)
 
 	// Wrap your handler
@@ -85,15 +85,15 @@ func ExampleNewRateLimiter() {
 // is typically used via Guard middleware, but Check() can be called directly.
 func ExampleNewOriginChecker() {
 	oc := mw.NewOriginChecker([]string{
-		"https://example.com",       // exact match
-		"*.example.com",             // wildcard subdomain
-		"localhost",                 // any localhost port
+		"https://example.com", // exact match
+		"*.example.com",       // wildcard subdomain
+		"localhost",           // any localhost port
 	})
 
-	fmt.Println(oc.Check("https://example.com"))       // true
-	fmt.Println(oc.Check("https://app.example.com"))   // true
-	fmt.Println(oc.Check("http://localhost:3000"))      // true
-	fmt.Println(oc.Check("https://evil.com"))           // false
+	fmt.Println(oc.Check("https://example.com"))     // true
+	fmt.Println(oc.Check("https://app.example.com")) // true
+	fmt.Println(oc.Check("http://localhost:3000"))   // true
+	fmt.Println(oc.Check("https://evil.com"))        // false
 	// Output:
 	// true
 	// true
