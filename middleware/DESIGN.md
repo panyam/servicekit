@@ -87,7 +87,7 @@ entities:
   - name: RequestLogger
     kind: func
     role: Middleware logging method/path/status/duration/IP via slog, with per-path skip list.
-    why: Wraps ResponseWriter in statusRecorder to capture the status code; auto-includes request_id when present, and skips noisy paths like /healthz.
+    why: Wraps ResponseWriter in statusRecorder to capture the status code (forwarding Flush and Hijack so SSE and WebSocket upgrades still work); auto-includes request_id when present, and skips noisy paths like /healthz.
   - name: RequestID
     kind: struct
     role: Middleware that propagates an incoming X-Request-Id or generates a new 16-byte hex ID.

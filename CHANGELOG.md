@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Fixed
+- WebSocket upgrades work behind `RequestLogger` again. Its `statusRecorder`
+  now implements `http.Hijacker`, which gorilla/websocket (through v1.5.3)
+  asserts on directly; before this every upgrade failed with "response does
+  not implement http.Hijacker" and a 400. A successful hijack is logged as
+  status 101. Hijacking a writer that can't be hijacked returns
+  `http.ErrNotSupported`.
+
 ## [v0.1.6] - 2026-10-21
 
 Graceful shutdown no longer hangs on long-lived requests (PR 37, issue 36).

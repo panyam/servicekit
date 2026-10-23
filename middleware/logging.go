@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -16,10 +19,11 @@ import (
 // arrive all at once, at the end.
 //
 // Unwrap() is the modern half, letting http.ResponseController reach the
-// original writer for flushing, hijacking and deadlines. Flush() is the
-// half that real callers need, because httputil.ReverseProxy and most
-// SSE code assert on http.Flusher directly rather than going through a
-// ResponseController.
+// original writer for flushing, hijacking and deadlines. Flush() and
+// Hijack() are the half that real callers need, because
+// httputil.ReverseProxy and most SSE code assert on http.Flusher directly,
+// and gorilla/websocket (through v1.5.3) asserts on http.Hijacker, rather
+// than going through a ResponseController.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -40,6 +44,23 @@ func (r *statusRecorder) Flush() {
 	if f, ok := r.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack forwards to the underlying writer so WebSocket upgrades work behind
+// RequestLogger. It returns http.ErrNotSupported when the writer underneath
+// cannot be hijacked. On success the status is recorded as 101, since the
+// handler writes the upgrade response on the raw connection and never calls
+// WriteHeader.
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("RequestLogger: underlying %T: %w", r.ResponseWriter, http.ErrNotSupported)
+	}
+	conn, rw, err := h.Hijack()
+	if err == nil {
+		r.status = http.StatusSwitchingProtocols
+	}
+	return conn, rw, err
 }
 
 // RequestLogger logs HTTP requests with method, path, status, duration, and client IP.
