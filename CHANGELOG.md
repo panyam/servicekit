@@ -5,23 +5,30 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.1.10] - 2026-10-23
+
+Fixes the data race `go test -race` reported on every grpcws WebSocket close,
+which kept mcpkit from running its massrelay room tests under `-race`. The fix
+changes two exported field types, so callers that read them directly need a
+one-line change. CI now runs the Go tests, which it didn't before.
 
 ### Changed
 - **Breaking:** `grpcws.StreamMetrics.MsgsSent`/`MsgsReceived` and
   `http.BaseConn.PingId` are `atomic.Int64` instead of `int64`. Read them with
   `Load()`, or `StreamMetrics.Sent()`/`Received()`. Neither type may be copied
-  after first use (#41).
+  after first use (issue 41, PR 42).
+- TS client dev dependencies: esbuild 0.28, vite 8.3, postcss 8.5.31, and
+  vitest 4.1.12 (PR 35). `npm audit` is clean.
 
 ### Fixed
 - Data race on every grpcws WebSocket close: `OnClose` logged the message
   counters with plain reads while the stream goroutines were still
-  incrementing them (#41). `BaseConn.DebugInfo` had the same race on `PingId`
-  against `SendPing`.
+  incrementing them (issue 41, PR 42). `BaseConn.DebugInfo` had the same
+  race on `PingId` against `SendPing`.
 
 ### Added
 - CI runs `go vet` and `go test -race` on the Go module, and fails on files
-  `gofmt` would change (#43).
+  `gofmt` would change (PR 42, PR 44).
 
 ## [v0.1.9] - 2026-10-23
 
