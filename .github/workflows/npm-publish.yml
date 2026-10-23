@@ -72,7 +72,9 @@ jobs:
       - name: Refuse to ship test files
         run: |
           node -e '
-            const [p] = JSON.parse(require("child_process").execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }));
+            // npm 10/11 print an array of packs, npm 12 an object keyed by package name.
+            const out = JSON.parse(require("child_process").execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { encoding: "utf8" }));
+            const p = Array.isArray(out) ? out[0] : Object.values(out)[0];
             const tests = p.files.map((f) => f.path).filter((f) => /\.test\./.test(f));
             if (tests.length) { console.error("tarball ships test files:\n  " + tests.join("\n  ")); process.exit(1); }
             console.log(p.name + "@" + p.version + ": " + p.files.length + " files");
