@@ -32,8 +32,8 @@ entities:
     why: Has CloseSend (half-close) but no CloseAndRecv, since responses keep flowing after the client stops sending.
   - name: StreamMetrics
     kind: struct
-    role: Per-connection counters (ConnectedAt, MsgsSent, MsgsReceived) updated atomically.
-    why: Counters are mutated from the response-forwarding goroutine and the message-handling goroutine concurrently, so increments use atomic.AddInt64.
+    role: Per-connection counters (ConnectedAt, MsgsSent, MsgsReceived as atomic.Int64) with Sent()/Received() accessors.
+    why: The response-forwarding and message-handling goroutines increment the counters while OnClose reads them, so the fields are atomic.Int64 and a plain read does not compile (#41).
   - name: baseGRPCConn
     kind: struct
     role: Embeds gohttp.BaseConn and adds the cancellable gRPC stream context, metrics, and envelope send helpers shared by all three connection types.

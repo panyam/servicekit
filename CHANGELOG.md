@@ -5,6 +5,23 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** `grpcws.StreamMetrics.MsgsSent`/`MsgsReceived` and
+  `http.BaseConn.PingId` are `atomic.Int64` instead of `int64`. Read them with
+  `Load()`, or `StreamMetrics.Sent()`/`Received()`. Neither type may be copied
+  after first use (#41).
+
+### Fixed
+- Data race on every grpcws WebSocket close: `OnClose` logged the message
+  counters with plain reads while the stream goroutines were still
+  incrementing them (#41). `BaseConn.DebugInfo` had the same race on `PingId`
+  against `SendPing`.
+
+### Added
+- CI runs `go vet` and `go test -race` on the Go module.
+
 ## [v0.1.9] - 2026-10-23
 
 First release of `@panyam/servicekit-client` through CI. v0.1.8's publish

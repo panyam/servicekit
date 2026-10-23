@@ -215,12 +215,13 @@ Each connection tracks metrics via `StreamMetrics`:
 ```go
 type StreamMetrics struct {
     ConnectedAt  time.Time
-    MsgsSent     int64
-    MsgsReceived int64
+    MsgsSent     atomic.Int64
+    MsgsReceived atomic.Int64
 }
 ```
 
-Access metrics in custom connection implementations or via logging.
+The counters are atomics because the stream goroutines keep incrementing them
+while `OnClose` reads them. Read them with `Sent()` and `Received()`.
 
 ## Error Handling
 
