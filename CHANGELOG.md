@@ -5,6 +5,23 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Changed
+- `@panyam/servicekit-client` now carries the Go module's version (it was
+  0.0.7 while the module was at v0.1.7), checked by `scripts/check-versions.sh`.
+  The next release tag publishes both at the same number.
+- The client's npm tarball no longer ships `src/__tests__` or the compiled
+  `dist/__tests__`. Its build uses `tsconfig.build.json`, which excludes tests.
+- esbuild ^0.27 (was ^0.24) for the client's ESM and browser bundles, and a
+  regenerated lockfile, which had drifted from package.json so `npm ci` failed.
+
+### Added
+- `.github/workflows/npm-publish.yml`, a reusable workflow that publishes one
+  npm package with npm trusted publishing (OIDC, no token). servicekit's own
+  `publish-npm.yml` uses it, and so can other repos.
+- CI (`ci.yml`) runs the version check and the TS client's type-check and tests.
+
 ## [v0.1.7] - 2026-10-23
 
 WebSocket upgrades work behind `RequestLogger` (PR 38).

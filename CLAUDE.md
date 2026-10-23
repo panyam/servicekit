@@ -23,6 +23,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **Nil-safe middleware** — all middleware components are no-ops when nil.
 - **Transport/codec separation** — pings/errors are always JSON at transport layer, regardless of data codec.
 - **No real gRPC server for tests** — grpcws integration tests use channel-driven test doubles satisfying the stream interfaces. No protobuf codegen needed.
+- **One version for Go and TS** — the Go module and `@panyam/servicekit-client` share the version under `## Version` in CAPABILITIES.md. A release bumps it there and in `clients/typescript/package.json` (and its lock); `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` publishes the client at X.Y.Z through `publish-npm.yml`, which calls the shared `npm-publish.yml` (npm trusted publishing, no token). Other repos call that shared workflow too.
 
 ## Gotchas
 
