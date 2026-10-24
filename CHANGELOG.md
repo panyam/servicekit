@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Breaking
+- `ProtoJSONCodec` and `BinaryProtoCodec` moved from `servicekit/http` to
+  `servicekit/http/protocodec`. `SendJsonResponse`, `ErrorToHttpCode`,
+  `WSConnWriteError` and `WSConnJSONReaderWriter` moved to
+  `servicekit/http/grpcutil`. Behaviour is unchanged, and there are no aliases
+  (see UPGRADING.md) (issue 17).
+
+### Changed
+- `servicekit/http` and `middleware` no longer import grpc or protobuf. A
+  minimal JSON WebSocket server goes from 14.8 MB to 9.5 MB.
+  `scripts/check-deps.sh` (also `make check-deps`) fails CI if either package
+  picks them up again (issue 17).
+
 ## [v0.1.12] - 2026-10-24
 
 Lets a grpcws server close the WebSocket when its stream ends, and drop

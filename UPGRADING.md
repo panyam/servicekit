@@ -1,5 +1,28 @@
 # Upgrading Guide
 
+## v0.1.x → v0.2.0: proto codecs and gRPC helpers moved
+
+`servicekit/http` no longer imports grpc or protobuf, so a JSON-only server stops linking them (a minimal WebSocket server goes from 14.8 MB to 9.5 MB). Six exported names moved to two sub-packages, and their behaviour is unchanged:
+
+| Before (`gohttp` = `servicekit/http`) | After |
+|---|---|
+| `gohttp.ProtoJSONCodec` | `protocodec.ProtoJSONCodec` (`servicekit/http/protocodec`) |
+| `gohttp.BinaryProtoCodec` | `protocodec.BinaryProtoCodec` |
+| `gohttp.SendJsonResponse` | `grpcutil.SendJsonResponse` (`servicekit/http/grpcutil`) |
+| `gohttp.ErrorToHttpCode` | `grpcutil.ErrorToHttpCode` |
+| `gohttp.WSConnWriteError` | `grpcutil.WSConnWriteError` |
+| `gohttp.WSConnJSONReaderWriter` | `grpcutil.WSConnJSONReaderWriter` |
+
+There are no deprecated aliases. An alias left in `servicekit/http` would have to import the new package, which would pull protobuf straight back in. The fix is an import line and a package prefix:
+
+```go
+import "github.com/panyam/servicekit/http/protocodec"
+
+conn.Codec = &protocodec.ProtoJSONCodec[*pb.Action, *pb.State]{NewInput: newAction}
+```
+
+`grpcws`, `middleware` and everything else in `servicekit/http` keep their import paths.
+
 ## JSONConn → Typed BaseConn (Optional)
 
 `JSONConn` (alias for `BaseConn[any, any]`) works well for dynamic JSON and is **not deprecated**. But if you want compile-time type safety, you can upgrade to typed messages with minimal changes.

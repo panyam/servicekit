@@ -1,4 +1,4 @@
-.PHONY: test test-race vet cover cover-html cover-func testall install-hooks
+.PHONY: test test-race vet check-deps cover cover-html cover-func testall install-hooks
 
 REPORT_DIR := test-reports
 
@@ -11,6 +11,10 @@ test-race:
 
 vet:
 	go vet ./...
+
+# JSON-only packages must not pull in grpc/protobuf/connect/gorm (issue 17).
+check-deps:
+	scripts/check-deps.sh
 
 cover: ## Run tests with coverage summary
 	go test -cover ./... -count=1 -timeout 60s

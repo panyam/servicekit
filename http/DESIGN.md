@@ -18,14 +18,10 @@ entities:
     kind: struct
     role: Strongly-typed JSON codec over Go structs.
     why: Decodes via zero-value of I — no factory needed because encoding/json allocates into the addressable target.
-  - name: ProtoJSONCodec
+  - name: protocodec.ProtoJSONCodec / protocodec.BinaryProtoCodec
     kind: struct
-    role: protobuf-message codec serialized as protojson (human-readable wire).
-    why: Needs a NewInput factory (or reflection fallback) because proto messages can't be zero-allocated generically; reflection path is the documented slow path.
-  - name: BinaryProtoCodec
-    kind: struct
-    role: protobuf codec in binary wire format (BinaryMessage frames).
-    why: Same factory/reflection split as ProtoJSONCodec; chosen for high-throughput where readability is irrelevant.
+    role: protobuf codecs (protojson text, binary frames), in the http/protocodec sub-package.
+    why: Kept out of this package so JSON-only users don't link protobuf (issue 17); scripts/check-deps.sh fails CI if http/ or middleware/ import grpc, protobuf, connect or gorm again. Both need a NewInput factory (or reflection fallback) because proto messages can't be zero-allocated generically.
   - name: MessageType
     kind: type
     role: Int alias over gorilla TextMessage/BinaryMessage frame types.
@@ -246,10 +242,10 @@ entities:
     kind: func
     role: Constructors returning sensible defaults for each config struct.
     why: Centralize the production-vs-dev default story (allow-all origins, 30s ping, etc.).
-  - name: JsonToQueryString / SendJsonResponse / ErrorToHttpCode / WSConnWriteError / WSConnWriteMessage / WSConnJSONReaderWriter / NormalizeWsUrl
+  - name: JsonToQueryString / WSConnWriteMessage / NormalizeWsUrl
     kind: func
-    role: Misc server-side HTTP/WS helpers (query encoding, gRPC-status→HTTP mapping, raw WS writes, ws/wss URL normalization).
-    why: ErrorToHttpCode/SendJsonResponse map google.golang.org/grpc status codes to HTTP — the package's gRPC-aware error bridge.
+    role: Misc server-side HTTP/WS helpers (query encoding, raw WS JSON writes, ws/wss URL normalization).
+    why: grpc-free; the gRPC-status helpers (SendJsonResponse, ErrorToHttpCode, WSConnWriteError, WSConnJSONReaderWriter) moved to http/grpcutil.
   - name: URLWaiter
     kind: struct
     role: Polls a URL until it returns success (readiness gate for dependencies).

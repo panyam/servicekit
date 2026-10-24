@@ -2,11 +2,8 @@ package http
 
 import (
 	"encoding/json"
-	"reflect"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // MessageType represents the WebSocket frame type
@@ -74,109 +71,6 @@ func (c *TypedJSONCodec[I, O]) Decode(data []byte, msgType MessageType) (I, erro
 func (c *TypedJSONCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
 	data, err := json.Marshal(msg)
 	return data, TextMessage, err
-}
-
-// ============================================================================
-// ProtoJSONCodec - Protobuf messages serialized as JSON
-// ============================================================================
-
-// ProtoJSONCodec handles encoding/decoding of protobuf messages using JSON format.
-// This provides human-readable wire format while maintaining proto type safety.
-//
-// For best performance, provide NewInput factory function. If not provided,
-// the codec falls back to reflection using the Input exemplar (slower).
-type ProtoJSONCodec[I proto.Message, O proto.Message] struct {
-	// NewInput is an optional factory function to create new input instances.
-	// When provided, this is used for optimal performance.
-	// Example: func() *pb.PlayerAction { return &pb.PlayerAction{} }
-	NewInput func() I
-
-	// Input is an exemplar instance used as fallback when NewInput is nil.
-	// The codec uses reflection to create new instances of the same type.
-	// Example: &pb.PlayerAction{}
-	Input I
-
-	// MarshalOptions configures protojson marshaling behavior.
-	MarshalOptions protojson.MarshalOptions
-
-	// UnmarshalOptions configures protojson unmarshaling behavior.
-	UnmarshalOptions protojson.UnmarshalOptions
-}
-
-// Decode unmarshals JSON data into a new protobuf message instance.
-func (c *ProtoJSONCodec[I, O]) Decode(data []byte, msgType MessageType) (I, error) {
-	msg := c.newInput()
-	err := c.UnmarshalOptions.Unmarshal(data, msg)
-	return msg, err
-}
-
-// Encode marshals a protobuf message to JSON bytes.
-func (c *ProtoJSONCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
-	data, err := c.MarshalOptions.Marshal(msg)
-	return data, TextMessage, err
-}
-
-// newInput creates a new instance of the input type.
-// Uses factory function if available, otherwise falls back to reflection.
-func (c *ProtoJSONCodec[I, O]) newInput() I {
-	// Fast path: use factory if provided
-	if c.NewInput != nil {
-		return c.NewInput()
-	}
-
-	// Slow path: use reflection from exemplar
-	t := reflect.TypeOf(c.Input)
-	if t.Kind() == reflect.Ptr {
-		return reflect.New(t.Elem()).Interface().(I)
-	}
-	return reflect.New(t).Elem().Interface().(I)
-}
-
-// ============================================================================
-// BinaryProtoCodec - Protobuf messages in binary format
-// ============================================================================
-
-// BinaryProtoCodec handles encoding/decoding of protobuf messages using binary format.
-// This provides maximum efficiency for high-throughput scenarios.
-//
-// For best performance, provide NewInput factory function. If not provided,
-// the codec falls back to reflection using the Input exemplar (slower).
-type BinaryProtoCodec[I proto.Message, O proto.Message] struct {
-	// NewInput is an optional factory function to create new input instances.
-	// When provided, this is used for optimal performance.
-	NewInput func() I
-
-	// Input is an exemplar instance used as fallback when NewInput is nil.
-	Input I
-}
-
-// Decode unmarshals binary protobuf data into a new message instance.
-func (c *BinaryProtoCodec[I, O]) Decode(data []byte, msgType MessageType) (I, error) {
-	msg := c.newInput()
-	err := proto.Unmarshal(data, msg)
-	return msg, err
-}
-
-// Encode marshals a protobuf message to binary bytes.
-func (c *BinaryProtoCodec[I, O]) Encode(msg O) ([]byte, MessageType, error) {
-	data, err := proto.Marshal(msg)
-	return data, BinaryMessage, err
-}
-
-// newInput creates a new instance of the input type.
-// Uses factory function if available, otherwise falls back to reflection.
-func (c *BinaryProtoCodec[I, O]) newInput() I {
-	// Fast path: use factory if provided
-	if c.NewInput != nil {
-		return c.NewInput()
-	}
-
-	// Slow path: use reflection from exemplar
-	t := reflect.TypeOf(c.Input)
-	if t.Kind() == reflect.Ptr {
-		return reflect.New(t.Elem()).Interface().(I)
-	}
-	return reflect.New(t).Elem().Interface().(I)
 }
 
 // ============================================================================

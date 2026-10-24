@@ -79,8 +79,10 @@ type Codec[I any, O any] interface {
 |-------|-------------------|-------------|----------|
 | `JSONCodec` | `any` | JSON text | Dynamic messages, debugging |
 | `TypedJSONCodec[I, O]` | `I`, `O` | JSON text | Typed Go structs |
-| `ProtoJSONCodec[I, O]` | `proto.Message` | JSON text | Proto messages, human-readable |
-| `BinaryProtoCodec[I, O]` | `proto.Message` | Binary | Proto messages, max efficiency |
+| `protocodec.ProtoJSONCodec[I, O]` | `proto.Message` | JSON text | Proto messages, human-readable |
+| `protocodec.BinaryProtoCodec[I, O]` | `proto.Message` | Binary | Proto messages, max efficiency |
+
+The proto codecs are in `servicekit/http/protocodec`, and the gRPC-status helpers (`SendJsonResponse`, `ErrorToHttpCode`) are in `servicekit/http/grpcutil`. A server that only uses the JSON codecs doesn't link grpc or protobuf, and `make check-deps` keeps it that way.
 
 ### BaseConn[I, O]
 

@@ -24,6 +24,7 @@ jobs:
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
       - run: go vet ./...
+      - run: scripts/check-deps.sh
       - run: go test -race ./...
 
   ts-client:
