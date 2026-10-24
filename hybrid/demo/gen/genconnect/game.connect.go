@@ -5,132 +5,160 @@
 package genconnect
 
 import (
-	connect "connectrpc.com/connect"
+	connect "connectrpc.com/connect/v2"
 	context "context"
-	errors "errors"
 	gen "github.com/panyam/servicekit/hybrid/demo/gen"
-	http "net/http"
-	strings "strings"
+	sync "sync"
 )
-
-// This is a compile-time assertion to ensure that this generated file and the connect package are
-// compatible. If you get a compiler error that this constant is not defined, this code was
-// generated with a version of connect newer than the one compiled into your binary. You can fix the
-// problem by either regenerating this code with an older version of connect or updating the connect
-// version compiled into your binary.
-const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// GameServiceName is the fully-qualified name of the GameService service.
 	GameServiceName = "servicekit.hybrid.demo.v1.GameService"
 )
 
-// These constants are the fully-qualified names of the RPCs defined in this package. They're
-// exposed at runtime as Spec.Procedure and as the final two segments of the HTTP route.
+// These constants are the procedure names of the RPCs defined in this package. They're exposed at
+// runtime as Spec.Procedure and as the final two segments of the HTTP route.
 //
 // Note that these are different from the fully-qualified method names used by
 // google.golang.org/protobuf/reflect/protoreflect. To convert from these constants to
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// GameServiceGetGameProcedure is the fully-qualified name of the GameService's GetGame RPC.
+	// GameServiceGetGameProcedure is the procedure name of the GameService's GetGame RPC.
 	GameServiceGetGameProcedure = "/servicekit.hybrid.demo.v1.GameService/GetGame"
-	// GameServiceWatchGameProcedure is the fully-qualified name of the GameService's WatchGame RPC.
+	// GameServiceWatchGameProcedure is the procedure name of the GameService's WatchGame RPC.
 	GameServiceWatchGameProcedure = "/servicekit.hybrid.demo.v1.GameService/WatchGame"
+)
+
+var (
+	gameServiceGetGameSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     gen.File_game_proto.Services().ByName("GameService").Methods().ByName("GetGame"),
+			Procedure:  GameServiceGetGameProcedure,
+		}
+	})
+	gameServiceWatchGameSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeServer,
+			Schema:     gen.File_game_proto.Services().ByName("GameService").Methods().ByName("WatchGame"),
+			Procedure:  GameServiceWatchGameProcedure,
+		}
+	})
 )
 
 // GameServiceClient is a client for the servicekit.hybrid.demo.v1.GameService service.
 type GameServiceClient interface {
-	GetGame(context.Context, *connect.Request[gen.GetGameRequest]) (*connect.Response[gen.Game], error)
-	WatchGame(context.Context, *connect.Request[gen.GetGameRequest]) (*connect.ServerStreamForClient[gen.Game], error)
+	GetGame(context.Context, *gen.GetGameRequest) (*gen.Game, error)
+	WatchGame(context.Context, *gen.GetGameRequest) (GameServiceWatchGameClientStream, error)
 }
 
 // NewGameServiceClient constructs a client for the servicekit.hybrid.demo.v1.GameService service.
-// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
-// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
-// connect.WithGRPC() or connect.WithGRPCWeb() options.
-//
-// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
-// http://api.acme.com or https://acme.com/grpc).
-func NewGameServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) GameServiceClient {
-	baseURL = strings.TrimRight(baseURL, "/")
-	gameServiceMethods := gen.File_game_proto.Services().ByName("GameService").Methods()
-	return &gameServiceClient{
-		getGame: connect.NewClient[gen.GetGameRequest, gen.Game](
-			httpClient,
-			baseURL+GameServiceGetGameProcedure,
-			connect.WithSchema(gameServiceMethods.ByName("GetGame")),
-			connect.WithClientOptions(opts...),
-		),
-		watchGame: connect.NewClient[gen.GetGameRequest, gen.Game](
-			httpClient,
-			baseURL+GameServiceWatchGameProcedure,
-			connect.WithSchema(gameServiceMethods.ByName("WatchGame")),
-			connect.WithClientOptions(opts...),
-		),
+// Multiple service clients may share a single connect.Client.
+func NewGameServiceClient(client *connect.Client) GameServiceClient {
+	return &gameServiceClient{client: client}
+}
+
+// GameServiceWatchGameClientStream is the client stream for the GameService's WatchGame RPC.
+type GameServiceWatchGameClientStream struct {
+	stream connect.ClientStream
+}
+
+// Receive returns the next response message from the server.
+func (s GameServiceWatchGameClientStream) Receive() (*gen.Game, error) {
+	var res gen.Game
+	if err := s.stream.Receive(&res); err != nil {
+		return nil, err
 	}
+	return &res, nil
 }
 
-// gameServiceClient implements GameServiceClient.
-type gameServiceClient struct {
-	getGame   *connect.Client[gen.GetGameRequest, gen.Game]
-	watchGame *connect.Client[gen.GetGameRequest, gen.Game]
-}
-
-// GetGame calls servicekit.hybrid.demo.v1.GameService.GetGame.
-func (c *gameServiceClient) GetGame(ctx context.Context, req *connect.Request[gen.GetGameRequest]) (*connect.Response[gen.Game], error) {
-	return c.getGame.CallUnary(ctx, req)
-}
-
-// WatchGame calls servicekit.hybrid.demo.v1.GameService.WatchGame.
-func (c *gameServiceClient) WatchGame(ctx context.Context, req *connect.Request[gen.GetGameRequest]) (*connect.ServerStreamForClient[gen.Game], error) {
-	return c.watchGame.CallServerStream(ctx, req)
+// Close releases the stream's resources. It is idempotent and is typically deferred to clean up a
+// stream abandoned before io.EOF.
+func (s GameServiceWatchGameClientStream) Close() error {
+	return s.stream.Close()
 }
 
 // GameServiceHandler is an implementation of the servicekit.hybrid.demo.v1.GameService service.
 type GameServiceHandler interface {
-	GetGame(context.Context, *connect.Request[gen.GetGameRequest]) (*connect.Response[gen.Game], error)
-	WatchGame(context.Context, *connect.Request[gen.GetGameRequest], *connect.ServerStream[gen.Game]) error
+	GetGame(context.Context, *gen.GetGameRequest) (*gen.Game, error)
+	WatchGame(context.Context, *gen.GetGameRequest, GameServiceWatchGameServerStream) error
 }
 
-// NewGameServiceHandler builds an HTTP handler from the service implementation. It returns the path
-// on which to mount the handler and the handler itself.
-//
-// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
-// and JSON codecs. They also support gzip compression.
-func NewGameServiceHandler(svc GameServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	gameServiceMethods := gen.File_game_proto.Services().ByName("GameService").Methods()
-	gameServiceGetGameHandler := connect.NewUnaryHandler(
-		GameServiceGetGameProcedure,
-		svc.GetGame,
-		connect.WithSchema(gameServiceMethods.ByName("GetGame")),
-		connect.WithHandlerOptions(opts...),
+// RegisterGameServiceHandler registers svc as the servicekit.hybrid.demo.v1.GameService
+// implementation on server.
+func RegisterGameServiceHandler(server *connect.Server, svc GameServiceHandler) {
+	adapter := gameServiceHandler{svc: svc}
+	server.Register(
+		connect.Method{Spec: gameServiceGetGameSpec(), Handler: adapter.getGame},
+		connect.Method{Spec: gameServiceWatchGameSpec(), Handler: adapter.watchGame},
 	)
-	gameServiceWatchGameHandler := connect.NewServerStreamHandler(
-		GameServiceWatchGameProcedure,
-		svc.WatchGame,
-		connect.WithSchema(gameServiceMethods.ByName("WatchGame")),
-		connect.WithHandlerOptions(opts...),
-	)
-	return "/servicekit.hybrid.demo.v1.GameService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case GameServiceGetGameProcedure:
-			gameServiceGetGameHandler.ServeHTTP(w, r)
-		case GameServiceWatchGameProcedure:
-			gameServiceWatchGameHandler.ServeHTTP(w, r)
-		default:
-			http.NotFound(w, r)
-		}
-	})
+}
+
+// GameServiceWatchGameServerStream is the server stream for the GameService's WatchGame RPC.
+type GameServiceWatchGameServerStream struct {
+	stream connect.ServerStream
+}
+
+// SendHeaders flushes the response headers without a message. The first Send does this implicitly.
+func (s GameServiceWatchGameServerStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a response message to the client.
+func (s GameServiceWatchGameServerStream) Send(res *gen.Game) error {
+	return s.stream.Send(res)
 }
 
 // UnimplementedGameServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedGameServiceHandler struct{}
 
-func (UnimplementedGameServiceHandler) GetGame(context.Context, *connect.Request[gen.GetGameRequest]) (*connect.Response[gen.Game], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("servicekit.hybrid.demo.v1.GameService.GetGame is not implemented"))
+func (UnimplementedGameServiceHandler) GetGame(context.Context, *gen.GetGameRequest) (*gen.Game, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "servicekit.hybrid.demo.v1.GameService.GetGame is not implemented")
 }
 
-func (UnimplementedGameServiceHandler) WatchGame(context.Context, *connect.Request[gen.GetGameRequest], *connect.ServerStream[gen.Game]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("servicekit.hybrid.demo.v1.GameService.WatchGame is not implemented"))
+func (UnimplementedGameServiceHandler) WatchGame(context.Context, *gen.GetGameRequest, GameServiceWatchGameServerStream) error {
+	return connect.NewError(connect.CodeUnimplemented, "servicekit.hybrid.demo.v1.GameService.WatchGame is not implemented")
+}
+
+type gameServiceClient struct {
+	client *connect.Client
+}
+
+func (c *gameServiceClient) GetGame(ctx context.Context, req *gen.GetGameRequest) (*gen.Game, error) {
+	var res gen.Game
+	if err := c.client.CallUnary(ctx, gameServiceGetGameSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *gameServiceClient) WatchGame(ctx context.Context, req *gen.GetGameRequest) (GameServiceWatchGameClientStream, error) {
+	stream, err := c.client.CallServerStream(ctx, gameServiceWatchGameSpec(), req)
+	if err != nil {
+		return GameServiceWatchGameClientStream{}, err
+	}
+	return GameServiceWatchGameClientStream{stream: stream}, nil
+}
+
+type gameServiceHandler struct{ svc GameServiceHandler }
+
+func (h gameServiceHandler) getGame(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req gen.GetGameRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.GetGame(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h gameServiceHandler) watchGame(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req gen.GetGameRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	return h.svc.WatchGame(ctx, &req, GameServiceWatchGameServerStream{stream: stream})
 }
