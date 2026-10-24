@@ -38,4 +38,6 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npx tsc --noEmit
+      # test/exports.test.mjs resolves the package's entry points, which name files in dist.
+      - run: npm run build
       - run: npm test

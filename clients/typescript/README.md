@@ -8,6 +8,17 @@ TypeScript client library for [ServiceKit](https://github.com/panyam/servicekit)
 npm install @panyam/servicekit-client
 ```
 
+Bundlers and Node get the ES build (`dist/index.mjs`) through `import`, and `require` gets the
+CommonJS build (`dist/index.js`). For a page with no bundler, the script build defines a
+`ServiceKit` global:
+
+```html
+<script src="https://unpkg.com/@panyam/servicekit-client/dist/servicekit-client.browser.js"></script>
+<script>
+  const client = new ServiceKit.GRPCWSClient();
+</script>
+```
+
 ## Architecture
 
 The client mirrors the server-side architecture with clear separation of concerns:
