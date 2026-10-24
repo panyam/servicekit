@@ -1,9 +1,12 @@
 package http
 
 import (
+	"errors"
 	"fmt"
+	"iter"
 	"sync"
 	"testing"
+	"time"
 )
 
 // ============================================================================
@@ -21,7 +24,7 @@ func TestMemoryEventStoreStoreAndReplay(t *testing.T) {
 	store.Store("stream1", StoredEvent{ID: "3", Event: "message", Data: []byte(`{"a":3}`)})
 
 	// Replay from unknown ID returns all events
-	events, err := store.Replay("stream1", "unknown")
+	events, err := ReplayAll(store, "stream1", "unknown")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -47,7 +50,7 @@ func TestMemoryEventStoreReplayFromMidStream(t *testing.T) {
 	}
 
 	// Replay from event "2" should return events 3, 4, 5
-	events, err := store.Replay("s1", "2")
+	events, err := ReplayAll(store, "s1", "2")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -70,7 +73,7 @@ func TestMemoryEventStoreReplayFromLastEvent(t *testing.T) {
 	store.Store("s1", StoredEvent{ID: "1", Event: "message", Data: []byte(`{}`)})
 	store.Store("s1", StoredEvent{ID: "2", Event: "message", Data: []byte(`{}`)})
 
-	events, err := store.Replay("s1", "2")
+	events, err := ReplayAll(store, "s1", "2")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -84,7 +87,7 @@ func TestMemoryEventStoreReplayFromLastEvent(t *testing.T) {
 func TestMemoryEventStoreReplayNonexistentStream(t *testing.T) {
 	store := NewMemoryEventStore(100)
 
-	events, err := store.Replay("nonexistent", "1")
+	events, err := ReplayAll(store, "nonexistent", "1")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -107,7 +110,7 @@ func TestMemoryEventStoreMaxEventsEviction(t *testing.T) {
 	}
 
 	// Should only have events 3, 4, 5 (oldest 1, 2 evicted)
-	events, err := store.Replay("s1", "unknown")
+	events, err := ReplayAll(store, "s1", "unknown")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -133,7 +136,7 @@ func TestMemoryEventStoreEvictionReplayFromEvictedID(t *testing.T) {
 	}
 
 	// Event "1" was evicted — fallback returns all 3 remaining events
-	events, err := store.Replay("s1", "1")
+	events, err := ReplayAll(store, "s1", "1")
 	if err != nil {
 		t.Fatalf("Replay returned error: %v", err)
 	}
@@ -160,13 +163,13 @@ func TestMemoryEventStoreTrim(t *testing.T) {
 	}
 
 	// s1 should be empty
-	events, _ := store.Replay("s1", "unknown")
+	events, _ := ReplayAll(store, "s1", "unknown")
 	if events != nil {
 		t.Errorf("Expected nil after Trim, got %d events", len(events))
 	}
 
 	// s2 should be unaffected
-	events, _ = store.Replay("s2", "unknown")
+	events, _ = ReplayAll(store, "s2", "unknown")
 	if len(events) != 1 {
 		t.Errorf("Expected s2 to have 1 event, got %d", len(events))
 	}
@@ -191,8 +194,8 @@ func TestMemoryEventStoreIsolation(t *testing.T) {
 	store.Store("s2", StoredEvent{ID: "1", Event: "message", Data: []byte(`{"stream":"s2"}`)})
 	store.Store("s2", StoredEvent{ID: "2", Event: "message", Data: []byte(`{"stream":"s2"}`)})
 
-	s1Events, _ := store.Replay("s1", "unknown")
-	s2Events, _ := store.Replay("s2", "unknown")
+	s1Events, _ := ReplayAll(store, "s1", "unknown")
+	s2Events, _ := ReplayAll(store, "s2", "unknown")
 
 	if len(s1Events) != 1 {
 		t.Errorf("s1 should have 1 event, got %d", len(s1Events))
@@ -214,7 +217,7 @@ func TestMemoryEventStorePreservesEventFields(t *testing.T) {
 	}
 	store.Store("s1", original)
 
-	events, _ := store.Replay("s1", "unknown")
+	events, _ := ReplayAll(store, "s1", "unknown")
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
@@ -271,7 +274,7 @@ func TestMemoryEventStoreConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			store.Replay("shared", "unknown")
+			ReplayAll(store, "shared", "unknown")
 		}()
 	}
 
@@ -282,7 +285,7 @@ func TestMemoryEventStoreConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			streamID := fmt.Sprintf("stream-%d", idx)
 			store.Store(streamID, StoredEvent{ID: "1", Event: "message", Data: []byte(`{}`)})
-			store.Replay(streamID, "unknown")
+			ReplayAll(store, streamID, "unknown")
 			store.Trim(streamID)
 		}(i)
 	}
@@ -298,13 +301,102 @@ func TestMemoryEventStoreReplayReturnsCopy(t *testing.T) {
 	store.Store("s1", StoredEvent{ID: "1", Event: "message", Data: []byte(`{"a":1}`)})
 	store.Store("s1", StoredEvent{ID: "2", Event: "message", Data: []byte(`{"a":2}`)})
 
-	events, _ := store.Replay("s1", "unknown")
+	events, _ := ReplayAll(store, "s1", "unknown")
 	// Mutate the returned slice
 	events[0].ID = "mutated"
 
 	// Re-replay should be unaffected
-	events2, _ := store.Replay("s1", "unknown")
+	events2, _ := ReplayAll(store, "s1", "unknown")
 	if events2[0].ID != "1" {
 		t.Errorf("Store internal state was mutated via Replay result: got ID %q, want '1'", events2[0].ID)
+	}
+}
+
+func storeN(t *testing.T, store EventStore, stream string, n int) {
+	t.Helper()
+	for i := 1; i <= n; i++ {
+		if err := store.Store(stream, StoredEvent{ID: fmt.Sprint(i), Data: []byte(fmt.Sprint(i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestMemoryEventStoreReplayStopsWhenConsumerBreaks(t *testing.T) {
+	store := NewMemoryEventStore(10)
+	storeN(t, store, "s1", 5)
+	var got []string
+	for ev, err := range store.Replay("s1", "unknown") {
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, ev.ID)
+		if len(got) == 2 {
+			break
+		}
+	}
+	if fmt.Sprint(got) != "[1 2]" {
+		t.Fatalf("got %v, want [1 2]", got)
+	}
+}
+
+// A slow consumer (an SSE write per event) must not block Store on the same
+// stream, so Replay can't hold the store's lock while it yields.
+func TestMemoryEventStoreReplayDoesNotBlockStore(t *testing.T) {
+	store := NewMemoryEventStore(10)
+	storeN(t, store, "s1", 3)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range store.Replay("s1", "unknown") {
+			store.Store("s1", StoredEvent{ID: "late"})
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Store blocked while Replay was yielding")
+	}
+}
+
+func TestMemoryEventStoreReplayIsASnapshot(t *testing.T) {
+	store := NewMemoryEventStore(10)
+	storeN(t, store, "s1", 3)
+	var got []string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for ev := range store.Replay("s1", "1") {
+			got = append(got, ev.ID)
+			store.Store("s1", StoredEvent{ID: "late-" + ev.ID})
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Store blocked while Replay was yielding")
+	}
+	if fmt.Sprint(got) != "[2 3]" {
+		t.Fatalf("got %v, want [2 3] (events stored during replay are not yielded)", got)
+	}
+}
+
+type failingStore struct{ EventStore }
+
+func (failingStore) Replay(string, string) iter.Seq2[StoredEvent, error] {
+	return func(yield func(StoredEvent, error) bool) {
+		if !yield(StoredEvent{ID: "1"}, nil) {
+			return
+		}
+		yield(StoredEvent{}, errors.New("backend down"))
+	}
+}
+
+func TestReplayAllReturnsTheFirstError(t *testing.T) {
+	events, err := ReplayAll(failingStore{}, "s1", "")
+	if err == nil || err.Error() != "backend down" {
+		t.Fatalf("got err %v, want backend down", err)
+	}
+	if len(events) != 1 || events[0].ID != "1" {
+		t.Fatalf("got %v, want the event read before the error", events)
 	}
 }
