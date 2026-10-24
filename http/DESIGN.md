@@ -58,6 +58,10 @@ entities:
     kind: struct
     role: Embeddable generic WS connection [I,O] wiring Codec + serialized Writer + ping/error/data dispatch.
     why: All outgoing traffic (data, ping, error, close) goes through one OutgoingMessage union on one Writer goroutine — the package's core defense against concurrent socket writes. A write error closes the socket so the read loop exits too; WriteTimeout turns a stuck client into such an error. CloseAfterSend arms a hard-close timer before queueing its final frames, since the unbuffered Writer can block behind a stuck client.
+  - name: ConnObserver
+    kind: interface
+    role: Hears every connection open/close (with ConnInfo and a CloseReason) and every frame sent or received, from BaseConn and BaseSSEConn.
+    why: Lets servicekit export connection metrics without importing a metrics library (prom/ implements it; OTEL users can too). The close reason is ranked (write failure > server_close > the loop's reason) and settled when the read loop ends, so closes set off by teardown don't overwrite the cause. ErrCloseSent writes record nothing because gorilla answers a client's close inside ReadMessage.
   - name: OutgoingMessage
     kind: struct
     role: Tagged union (Data | Ping | Error | Close) carried on BaseConn's Writer.

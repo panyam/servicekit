@@ -863,6 +863,10 @@ All gRPC-WS messages use a JSON envelope:
 go run ./cmd/grpcws-demo
 
 # Open http://localhost:8080 in browser to test all streaming patterns
+# Prometheus metrics are on http://localhost:8080/metrics
+
+# 300 subscribers, 10 that never read, checked against /metrics
+make exercise
 ```
 
 ## Graceful Shutdown
@@ -913,6 +917,29 @@ router.HandleFunc("/rpc", gohttp.StreamableServe(
 - **SingleResponse** — `Content-Type: application/json`, custom status codes
 - **StreamResponse** — `Content-Type: text/event-stream`, channel-based for backpressure
 - Request-scoped streams (simpler than SSEConn for one-shot streaming)
+
+## Metrics
+
+`http.ConnObserver` is told when connections open and close, and about every
+frame each way. `BaseConn` and `BaseSSEConn` call it, so it covers WebSocket,
+SSE and grpcws. It has no metrics dependency, and `servicekit/prom` exports it
+to Prometheus:
+
+```go
+conns := prom.NewConnMetrics(nil)    // registers with prometheus.DefaultRegisterer
+reqs := prom.NewHTTPMetrics(nil)
+router.Use(reqs.Middleware)          // route label = the mux path template
+router.Handle("/metrics", promhttp.Handler())
+
+config := gohttp.DefaultWSConnConfig()
+config.Observer = conns
+router.HandleFunc("/ws", gohttp.WSServe(handler, config))
+```
+
+`servicekit_connections_closed_total` has a `reason` label, so clients dropped
+by `WriteTimeout` show up as `reason="write_timeout"` and grpcws streams closed
+by `CloseOnStreamEnd` as `reason="server_close"`. If you already use
+OpenTelemetry metrics, implement `ConnObserver` over your meter instead.
 
 ## Upgrading
 
@@ -967,12 +994,14 @@ middleware.ApplyDefaults(srv)
 
 ## Testing
 
-See the comprehensive test file `ws2_test.go` for examples of:
+See `http/wsextra_test.go` for examples of:
 - Unit testing WebSocket handlers
 - Integration testing with real WebSocket connections
-- Load testing with multiple concurrent connections
 - Ping-pong mechanism testing
 - Error scenario testing
+
+Load tests are in `http/load_test.go` and `http/sse_load_test.go`, using the
+client driver in `internal/loadtest` (they skip under `-short`).
 
 ## Best Practices
 

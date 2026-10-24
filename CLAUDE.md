@@ -10,6 +10,8 @@ ServiceKit is a Go library for production-grade WebSocket, SSE, and gRPC-over-We
 make test          # go test ./...
 make test-race     # go test -race -count=5 -timeout 300s ./...
 make vet           # go vet ./...
+make check-deps    # http/ and middleware/ import no grpc, protobuf, Connect, gorm or Prometheus
+make exercise      # mission #51: cmd/grpcws-demo with 300 grpcws subscribers, checked against /metrics
 make install-hooks # install pre-push hook (runs test + test-race)
 ```
 
@@ -27,7 +29,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 
 ## Modules
 
-- Root `github.com/panyam/servicekit`: `http/`, `middleware/`, `grpcws/`. Its `go.mod` has no Connect or gorm (v0.2.0 deleted `auth/` and moved `connectbridge` into `hybrid/`). `http/` and `middleware/` must not import grpc, protobuf, Connect or gorm; `make check-deps` (in CI) enforces it. Proto codecs are in `http/protocodec`, gRPC-status helpers in `http/grpcutil`.
+- Root `github.com/panyam/servicekit`: `http/`, `middleware/`, `grpcws/`, `prom/`. Its `go.mod` has no Connect or gorm (v0.2.0 deleted `auth/` and moved `connectbridge` into `hybrid/`). It does require Prometheus client_golang, for `prom/` only. `http/` and `middleware/` must not import grpc, protobuf, Connect, gorm or Prometheus; `make check-deps` (in CI) enforces it. Proto codecs are in `http/protocodec`, gRPC-status helpers in `http/grpcutil`, Prometheus in `prom/` (an `http.ConnObserver`). `internal/loadtest` is the client driver for the load tests and `make exercise`; it imports no servicekit package, so tests inside `package http` can use it.
 - `hybrid/` is a separate module (grpc-gateway, Connect v2, `hybrid/connectbridge`). Root `go test ./...` skips it; run `make -C hybrid test exercise`. It requires a **released** root version, never a `replace`. Tag it `hybrid/vX.Y.Z` with the same X.Y.Z as the root release that it was tested against.
 - `hybrid/demo/gen` is generated: `make -C hybrid gen` (buf remote plugins). The Connect plugin is pinned to `buf.build/connectrpc/go:v2.0.2` to match `connectrpc.com/connect/v2` in `hybrid/go.mod`. Connect v2 drops `Request[T]`/`Response[T]` and per-handler options: handlers register on a `*connect.Server`, and codecs go to `connecthttp.Mount` (`WithCodecs` replaces the defaults). `connectbridge` depends only on `Send(*T) error`, so it serves v1 callers too.
 
@@ -39,11 +41,13 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **gocurrent dependency** — requires v0.0.13+ for race-free `Writer` and `Reader`. Earlier versions have data races on `isRunning` (Writer) and `closedChan` (Reader).
 - **`conc.Writer` input is unbuffered** — `Send` blocks while the Writer is stuck in a write to a client that stopped reading. Anything that must happen regardless (a hard-close timer, a deadline) has to be armed *before* the `Send`, as `BaseConn.CloseAfterSend` does. (Issue #47.)
 - **`conc.Reader` reports `net.ErrClosed` only on `ClosedChan()`**, never on `OutputChan()`. `WSHandleConn` selects on both. A clean client close (1000) lands there too, because the read wrapper maps it to `net.ErrClosed`.
+- **Close reasons are settled when the read loop ends.** `WSHandleConn` defers `settleClose` before `OnClose`; anything noted after (a grpcws stream cancelled in `OnClose` calls `CloseAfterSend`) is ignored. A write failure or `CloseAfterSend` noted earlier outranks the loop's own reason. Writes that fail with `websocket.ErrCloseSent` record nothing: gorilla answers a client's close frame from inside `ReadMessage`, so every later write fails that way. Both races showed up only in `make exercise` (19 `write_error` and 1 extra `server_close` out of 300).
+- **macOS listen backlog is 128.** A test that dials a few hundred clients at once gets `connection reset by peer`. `loadtest.Dial` caps dials at 32; do the same in hand-rolled loops.
 - **Stuck-client tests need big frames** — loopback socket buffers absorbed 1.8M small frames (~70MB) without blocking. Use 256KB+ payloads (e.g. `wrapperspb.String`) so writes actually block.
 
 ## Issues and missions
 
-Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.claude/skills/retriage/queue.sh` prints the queue. There are two active missions: #51 `mission_observable_relay` (relay metrics under load, exercise is `make exercise`, which #13 creates) and #52 `mission_massrelay_eviction` (exercise is massrelay's `make test-interop`, pending panyam/massrelay#50). A new issue gets one of `P0`–`P3` and either a mission link or `waiting` with its trigger.
+Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.claude/skills/retriage/queue.sh` prints the queue. There are two active missions: #51 `mission_observable_relay` (relay metrics under load, exercise is `make exercise`) and #52 `mission_massrelay_eviction` (exercise is massrelay's `make test-interop`, pending panyam/massrelay#50). #53 `mission_lean_import` is done. A new issue gets one of `P0`–`P3` and either a mission link or `waiting` with its trigger.
 
 ## Project Docs
 

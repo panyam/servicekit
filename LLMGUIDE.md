@@ -449,6 +449,32 @@ http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 
 The full example is `hybrid/demo`, and `make -C hybrid exercise` checks that all three return the same JSON.
 
+### Template 11: Prometheus Metrics for Connections and Requests
+
+```go
+import (
+    "github.com/panyam/servicekit/prom"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+conns := prom.NewConnMetrics(nil)          // nil: prometheus.DefaultRegisterer
+reqs := prom.NewHTTPMetrics(nil)
+
+router := mux.NewRouter()
+router.Use(reqs.Middleware)                // inside the router, so route = path template
+router.Handle("/metrics", promhttp.Handler())
+
+wsConfig := gohttp.DefaultWSConnConfig()
+wsConfig.Observer = conns                  // every BaseConn served with this config
+router.HandleFunc("/ws", gohttp.WSServe(handler, wsConfig))
+
+sub := grpcws.NewServerStreamHandler(create, parse)
+sub.Observer = conns                       // grpcws reports transport="grpcws", mode="server"
+sub.WriteTimeout = 10 * time.Second        // stuck clients show up as reason="write_timeout"
+```
+
+On OpenTelemetry instead, implement `gohttp.ConnObserver` (four methods) over your meter and skip `prom`. `make exercise` runs `cmd/grpcws-demo` with 300 subscribers and checks `/metrics` against what the driver did.
+
 ## Key Rules (Do's and Don'ts)
 
 ### MUST Do
@@ -534,6 +560,7 @@ func (c *MyConn) HandleMessage(msg any) error {
 | SSE session hub | `http/ssehub.go` |
 | Graceful shutdown | `http/graceful.go` |
 | Streamable HTTP | `http/streamable.go` |
+| Connection metrics hooks | `http/observer.go`, `prom/` |
 | Stream handlers | `grpcws/server_stream.go`, `grpcws/client_stream.go`, `grpcws/bidi_stream.go` |
 
 ## Message Protocol (gRPC-WS)

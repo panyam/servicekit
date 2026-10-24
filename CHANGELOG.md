@@ -5,6 +5,40 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+Connection metrics. Servers can now see how many WebSocket, SSE and grpcws
+connections are open, why each one closed (including clients dropped for
+not reading), and how many frames went each way, without hand-rolling it.
+The hooks have no metrics dependency, and `servicekit/prom` exports them to
+Prometheus (issues 11 and 13, mission 51).
+
+### Added
+- `http.ConnObserver`, with `ConnInfo` and `CloseReason`. Set it on
+  `BaseConn.Observer` / `BaseSSEConn.Observer`, once on
+  `WSConnConfig.Observer` / `SSEConnConfig.Observer`, or on
+  `grpcws.ConnOptions.Observer`. It hears every open, every close with a
+  reason (`client_close`, `server_close`, `write_timeout`, `write_error`,
+  `pong_timeout`, `read_error`, `start_failed`) and lifetime, and every frame
+  sent or received. A nil observer costs nothing.
+- `servicekit/prom`: `ConnMetrics` implements `ConnObserver` for Prometheus,
+  and `HTTPMetrics` is request middleware labelled by mux route template. The
+  root `go.mod` now requires `prometheus/client_golang` v1.24.1, but
+  `http/` and `middleware/` don't import it, and `make check-deps` now fails if
+  they do.
+- Load tests for WebSocket (100 connections, 500 connect/disconnect cycles
+  with a goroutine-leak check, broadcast, a slow consumer) and SSE (100
+  connections, hub churn). They skip under `-short`.
+- `make exercise`: `cmd/grpcws-demo -exercise` opens 300 grpcws
+  subscribers, 10 of which never read, and checks `/metrics` against what the
+  driver did. CI runs it. The demo serves `/metrics` and takes
+  `-write-timeout` and `-close-on-stream-end`.
+
+### Fixed
+- `cmd/grpcws-demo`: a room sent its join/leave/action events while holding
+  its lock, and its broadcast loop needs that lock to drain them, so many
+  players leaving at once could deadlock it.
+
 ## [v0.2.0] - 2026-10-24
 
 A breaking release that batches everything we had queued, so consumers
