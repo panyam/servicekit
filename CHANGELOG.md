@@ -5,27 +5,36 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.2.0] - 2026-10-24
+
+A breaking release that batches everything we had queued, so consumers
+migrate once. A JSON-only WebSocket or SSE server no longer links grpc or
+protobuf, and the root module no longer requires gorm or Connect. Most callers
+only need the import and rename table in UPGRADING.md. The one change in
+behaviour is `EventStore.Replay`, which now iterates instead of copying. The new
+`hybrid` module (tagged `hybrid/v0.2.0`) serves one proto service over grpcws,
+grpc-gateway JSON and Connect v2 with the same JSON on all three.
 
 ### Breaking
 - `ProtoJSONCodec` and `BinaryProtoCodec` moved from `servicekit/http` to
   `servicekit/http/protocodec`. `SendJsonResponse`, `ErrorToHttpCode`,
   `WSConnWriteError` and `WSConnJSONReaderWriter` moved to
   `servicekit/http/grpcutil`. Behaviour is unchanged, and there are no aliases
-  (see UPGRADING.md) (issue 17).
+  (see UPGRADING.md) (issue 17, PR 54).
 - Go-style initialisms with no deprecated wrappers: `ConnID()` (on `WSConn`,
   `BiDirStreamConn`, `SSEConn`), `ConnIDStr`, `PingID`, `JSONGet`,
   `JSONToQueryString`, `NewJSONRequest`, `MakeURL`, `NormalizeWSURL`,
   `DefaultHTTPClient` and the QPS clients, `grpcutil.SendJSONResponse`,
-  `grpcutil.ErrorToHTTPCode`. Wire JSON keys are unchanged (issue 56).
+  `grpcutil.ErrorToHTTPCode`. Wire JSON keys are unchanged (issue 56, PR 57).
 - `EventStore.Replay` returns `iter.Seq2[StoredEvent, error]` instead of a
   slice. `ReplayAll` collects it. `MemoryEventStore` replays without copying,
-  and without holding its lock while the caller writes each event (issue 20).
+  and without holding its lock while the caller writes each event (issue 20,
+  PR 57).
 - `connectbridge` moved into the `hybrid` module, at
   `servicekit/hybrid/connectbridge`. `NewConnectStreamBridge` takes any
   `Sender[T]`, which v1's `*connect.ServerStream[T]` still satisfies
-  (issue 56).
-- `auth/` is deleted. goapplib and oneauth cover it (issue 56).
+  (issue 56, PR 57).
+- `auth/` is deleted. goapplib and oneauth cover it (issue 56, PR 57).
 - The root `go.mod` no longer requires gorm or Connect.
 
 ### Added
@@ -35,14 +44,14 @@ and are not back-filled here.
   emits zero values and Connect and grpcws don't, so the same message came back
   in two shapes. `hybrid.Mux` mounts the gateway under a prefix so it can't
   swallow the other routes. `hybrid/demo` and `make -C hybrid exercise` show
-  it end to end (issue 50). It's on Connect v2, `connectrpc.com/connect/v2`
-  (issue 55).
+  it end to end (issue 50, PR 54). It's on Connect v2,
+  `connectrpc.com/connect/v2` (issue 55, PR 57).
 
 ### Changed
 - `servicekit/http` and `middleware` no longer import grpc or protobuf. A
   minimal JSON WebSocket server goes from 14.8 MB to 9.5 MB.
   `scripts/check-deps.sh` (also `make check-deps`) fails CI if either package
-  picks them up again (issue 17).
+  picks them up again (issue 17, PR 54).
 
 ## [v0.1.12] - 2026-10-24
 
