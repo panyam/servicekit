@@ -90,6 +90,17 @@ type BaseConn[I any, O any] struct {
 	// the Writer until the pong timeout.
 	WriteTimeout time.Duration
 
+	// Observer, if set, is told when this connection opens and closes and
+	// about every frame it reads or writes. WSConnConfig.Observer fills it in
+	// when it is nil.
+	Observer ConnObserver
+
+	// Info is what the connection reports itself as to Observer. A zero
+	// Transport reports as "ws".
+	Info ConnInfo
+
+	stats connStats
+
 	// wsConn is the underlying WebSocket connection.
 	// Set during OnStart.
 	wsConn *websocket.Conn
@@ -135,7 +146,11 @@ func (b *BaseConn[I, O]) ReadMessage(conn *websocket.Conn) (I, error) {
 		var zero I
 		return zero, err
 	}
-	return b.Codec.Decode(data, MessageType(msgType))
+	msg, err := b.Codec.Decode(data, MessageType(msgType))
+	if err == nil && b.Observer != nil {
+		b.Observer.MessageReceived(b.info())
+	}
+	return msg, err
 }
 
 // OnStart initializes the connection after WebSocket upgrade.
@@ -144,15 +159,19 @@ func (b *BaseConn[I, O]) OnStart(conn *websocket.Conn) error {
 	log.Printf("Starting %s connection: %s", b.Name(), b.ConnID())
 
 	b.wsConn = conn
+	b.stats.open(b.Observer, b.info())
 	b.Writer = conc.NewWriter(func(msg OutgoingMessage[O]) error {
 		if b.WriteTimeout > 0 {
 			conn.SetWriteDeadline(time.Now().Add(b.WriteTimeout))
 		}
-		err := b.write(conn, msg)
+		kind, err := b.write(conn, msg)
 		if err != nil {
 			// The Writer stops on any error and gorilla fails every later
 			// write, so close the socket to end the read loop too.
+			b.stats.noteReason(writeFailReason(err))
 			conn.Close()
+		} else if kind != "" && b.Observer != nil {
+			b.Observer.MessageSent(b.info(), kind)
 		}
 		return err
 	})
@@ -160,26 +179,43 @@ func (b *BaseConn[I, O]) OnStart(conn *websocket.Conn) error {
 	return nil
 }
 
-func (b *BaseConn[I, O]) write(conn *websocket.Conn, msg OutgoingMessage[O]) error {
+// write sends one message and returns the frame kind it wrote ("" if none).
+func (b *BaseConn[I, O]) write(conn *websocket.Conn, msg OutgoingMessage[O]) (string, error) {
 	if msg.Ping != nil {
-		return b.writePing(conn, msg.Ping)
+		return "ping", b.writePing(conn, msg.Ping)
 	} else if msg.Error != nil {
 		if msg.Error == io.EOF {
 			log.Println("Stream closed...", msg.Error)
-			return nil
+			return "", nil
 		}
-		return b.writeError(conn, msg.Error)
+		return "error", b.writeError(conn, msg.Error)
 	} else if msg.Data != nil {
-		return b.writeMessage(conn, *msg.Data)
+		return "data", b.writeMessage(conn, *msg.Data)
 	} else if msg.Close != nil {
 		deadline := time.Now().Add(time.Second)
 		if b.WriteTimeout > 0 {
 			deadline = time.Now().Add(b.WriteTimeout)
 		}
-		return conn.WriteControl(websocket.CloseMessage,
+		return "close", conn.WriteControl(websocket.CloseMessage,
 			websocket.FormatCloseMessage(msg.Close.Code, msg.Close.Reason), deadline)
 	}
-	return nil
+	return "", nil
+}
+
+func (b *BaseConn[I, O]) info() ConnInfo {
+	info := b.Info
+	if info.Transport == "" {
+		info.Transport = "ws"
+	}
+	return info
+}
+
+func (b *BaseConn[I, O]) settleCloseReason(r CloseReason) { b.stats.settle(r) }
+
+func (b *BaseConn[I, O]) defaultObserver(o ConnObserver) {
+	if b.Observer == nil {
+		b.Observer = o
+	}
 }
 
 // writeMessage encodes and sends a typed message.
@@ -260,6 +296,7 @@ func (b *BaseConn[I, O]) OnClose() {
 	if b.Writer != nil {
 		b.Writer.Stop()
 	}
+	b.stats.close(b.Observer, b.info(), CloseClient)
 	log.Printf("Closed %s connection: %s", b.Name(), b.ConnID())
 }
 
@@ -338,6 +375,7 @@ func (b *BaseConn[I, O]) CloseAfterSend(code int, reason string, grace time.Dura
 		timer.Stop()
 		return
 	}
+	b.stats.noteReason(CloseServer)
 	for _, m := range last {
 		b.SendOutput(m)
 	}

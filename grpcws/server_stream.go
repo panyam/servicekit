@@ -147,7 +147,7 @@ func (h *ServerStreamHandler[Req, Resp, Stream]) Validate(
 	}
 
 	conn := &ServerStreamConn[Req, Resp, Stream]{
-		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ServerStreamConn"),
+		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ServerStreamConn", "server"),
 		stream:       stream,
 		codec:        codec,
 	}

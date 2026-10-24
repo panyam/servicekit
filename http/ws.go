@@ -53,6 +53,10 @@ type WSConnConfig struct {
 	// Upgrader handles the HTTP to WebSocket protocol upgrade.
 	// Configure ReadBufferSize, WriteBufferSize, and CheckOrigin as needed.
 	Upgrader websocket.Upgrader
+
+	// Observer is given to every connection that embeds BaseConn and has no
+	// Observer of its own. See ConnObserver.
+	Observer ConnObserver
 }
 
 // DefaultWSConnConfig returns a WSConnConfig with sensible defaults:
@@ -129,6 +133,10 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 	if config == nil {
 		config = DefaultWSConnConfig()
 	}
+	// Before the Reader starts, since ReadMessage reports to the observer.
+	if d, ok := any(ctx).(observerDefaulter); ok && config.Observer != nil {
+		d.defaultObserver(config.Observer)
+	}
 	reader := conc.NewReader(func() (I, error) {
 		res, err := ctx.ReadMessage(conn)
 		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNoStatusReceived, websocket.CloseAbnormalClosure) {
@@ -145,8 +153,13 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 	defer pongChecker.Stop()
 
 	defer ctx.OnClose()
+	// Runs before OnClose. Whatever ended the loop sets reason; a server
+	// close or write failure noted earlier outranks the default.
+	reason := CloseClient
+	defer func() { settleClose(ctx, reason) }()
 	err := ctx.OnStart(conn)
 	if err != nil {
+		reason = CloseStartFailed
 		return
 	}
 
@@ -161,6 +174,7 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 			if hb_delta > config.PongPeriod.Seconds() {
 				// Lost connection with conn so can drop off?
 				if ctx.OnTimeout() {
+					reason = ClosePongTimeout
 					log.Printf("Last heart beat more than %d seconds ago.  Killing connection", int(hb_delta))
 					return
 				}
@@ -185,6 +199,7 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 						return
 					}
 					if ctx.OnError(result.Error) != nil {
+						reason = CloseReadError
 						log.Println("Closing due to Error: ", result.Error)
 						return
 					}
