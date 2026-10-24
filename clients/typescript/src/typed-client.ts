@@ -9,8 +9,8 @@
  * - etc.
  */
 
-import { GRPCWSClient } from './grpcws-client';
-import { ClientOptions, VoidHandler, ErrorHandler } from './types';
+import { GRPCWSClient, StreamCloseInfo } from './grpcws-client';
+import { ClientOptions, VoidHandler, ErrorHandler, CloseHandler } from './types';
 
 /**
  * Type-safe gRPC-WebSocket client with generic input/output types.
@@ -59,8 +59,8 @@ export class TypedGRPCWSClient<TIn, TOut> {
   /** Called when the server sends an error */
   public onError: ErrorHandler = () => {};
 
-  /** Called when the connection closes */
-  public onClose: VoidHandler = () => {};
+  /** Called when the connection closes, with the close code and whether stream_end came first */
+  public onClose: CloseHandler<StreamCloseInfo> = () => {};
 
   /** Called when a ping is received */
   public onPing: (pingId: number) => void = () => {};
@@ -139,8 +139,8 @@ export class TypedGRPCWSClient<TIn, TOut> {
       this.onError(error);
     };
 
-    this.client.onClose = () => {
-      this.onClose();
+    this.client.onClose = (info: StreamCloseInfo) => {
+      this.onClose(info);
     };
 
     this.client.onPing = (pingId: number) => {

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -165,19 +166,23 @@ func WSHandleConn[I any, S WSConn[I]](conn *websocket.Conn, ctx S, config *WSCon
 				}
 			}
 			break
+		case err := <-reader.ClosedChan():
+			// The Reader reports net.ErrClosed here and not on OutputChan.
+			// That covers a clean close from the client (see the read
+			// wrapper above) and a server-side conn.Close.
+			log.Println("WebSocket reader stopped: ", err)
+			return
 		case result := <-reader.OutputChan():
 			conn.SetReadDeadline(time.Now().Add(config.PongPeriod))
 			lastReadAt = time.Now()
 			if result.Error != nil {
 				if result.Error != io.EOF {
-					if ce, ok := result.Error.(*websocket.CloseError); ok {
+					// A closed socket has nothing more to read, so OnError
+					// can't keep it alive.
+					var ce *websocket.CloseError
+					if errors.As(result.Error, &ce) {
 						log.Println("WebSocket Closed: ", ce)
-						switch ce.Code {
-						case websocket.CloseAbnormalClosure:
-						case websocket.CloseNormalClosure:
-						case websocket.CloseGoingAway:
-							return
-						}
+						return
 					}
 					if ctx.OnError(result.Error) != nil {
 						log.Println("Closing due to Error: ", result.Error)

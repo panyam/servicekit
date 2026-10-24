@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 	conc "github.com/panyam/gocurrent"
@@ -24,6 +25,16 @@ type OutgoingMessage[O any] struct {
 
 	// Error is an error message (mutually exclusive with Data/Ping)
 	Error error
+
+	// Close asks the Writer to send a WebSocket close frame. Queued by
+	// CloseAfterSend; anything queued after it fails with ErrCloseSent.
+	Close *CloseData
+}
+
+// CloseData carries the status code and reason for a WebSocket close frame.
+type CloseData struct {
+	Code   int
+	Reason string
 }
 
 // PingData contains ping message metadata.
@@ -72,9 +83,19 @@ type BaseConn[I any, O any] struct {
 	// goroutines, so it is atomic and BaseConn must not be copied after use.
 	PingId atomic.Int64
 
+	// WriteTimeout bounds each write to the client. A write that does not
+	// finish in time (a client that has stopped reading and filled its TCP
+	// window) fails, and the connection is closed so WSHandleConn exits and
+	// OnClose runs. Zero means no deadline, which lets a stuck client block
+	// the Writer until the pong timeout.
+	WriteTimeout time.Duration
+
 	// wsConn is the underlying WebSocket connection.
 	// Set during OnStart.
 	wsConn *websocket.Conn
+
+	// closeTimer is the hard close armed by CloseAfterSend.
+	closeTimer atomic.Pointer[time.Timer]
 }
 
 // Name returns the connection name.
@@ -124,21 +145,40 @@ func (b *BaseConn[I, O]) OnStart(conn *websocket.Conn) error {
 
 	b.wsConn = conn
 	b.Writer = conc.NewWriter(func(msg OutgoingMessage[O]) error {
-		// Handle the different message types
-		if msg.Ping != nil {
-			return b.writePing(conn, msg.Ping)
-		} else if msg.Error != nil {
-			if msg.Error == io.EOF {
-				log.Println("Stream closed...", msg.Error)
-				return nil
-			}
-			return b.writeError(conn, msg.Error)
-		} else if msg.Data != nil {
-			return b.writeMessage(conn, *msg.Data)
+		if b.WriteTimeout > 0 {
+			conn.SetWriteDeadline(time.Now().Add(b.WriteTimeout))
 		}
-		return nil
+		err := b.write(conn, msg)
+		if err != nil {
+			// The Writer stops on any error and gorilla fails every later
+			// write, so close the socket to end the read loop too.
+			conn.Close()
+		}
+		return err
 	})
 
+	return nil
+}
+
+func (b *BaseConn[I, O]) write(conn *websocket.Conn, msg OutgoingMessage[O]) error {
+	if msg.Ping != nil {
+		return b.writePing(conn, msg.Ping)
+	} else if msg.Error != nil {
+		if msg.Error == io.EOF {
+			log.Println("Stream closed...", msg.Error)
+			return nil
+		}
+		return b.writeError(conn, msg.Error)
+	} else if msg.Data != nil {
+		return b.writeMessage(conn, *msg.Data)
+	} else if msg.Close != nil {
+		deadline := time.Now().Add(time.Second)
+		if b.WriteTimeout > 0 {
+			deadline = time.Now().Add(b.WriteTimeout)
+		}
+		return conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(msg.Close.Code, msg.Close.Reason), deadline)
+	}
 	return nil
 }
 
@@ -214,6 +254,9 @@ func (b *BaseConn[I, O]) OnError(err error) error {
 
 // OnClose cleans up when the connection closes.
 func (b *BaseConn[I, O]) OnClose() {
+	if t := b.closeTimer.Load(); t != nil {
+		t.Stop()
+	}
 	if b.Writer != nil {
 		b.Writer.Stop()
 	}
@@ -269,4 +312,34 @@ func (h *BaseHandler[I, O]) Validate(w http.ResponseWriter, r *http.Request) (*B
 		Codec:   h.Codec,
 		NameStr: h.Name,
 	}, true
+}
+
+// CloseAfterSend ends the connection from the server side. It queues last,
+// then a close frame with code and reason, all behind whatever is already
+// queued, so the client reads every message before the close.
+//
+// A client that answers the close frame ends the read loop the normal way.
+// One that has stopped reading may leave the Writer blocked, so before
+// queueing anything CloseAfterSend arms a timer that closes the socket after
+// grace. That unblocks the Writer and the read loop, WSHandleConn returns, and
+// OnClose runs (which stops the timer if the close finished first).
+//
+// It may block until the messages are queued or the socket is closed, so call
+// it from a stream goroutine rather than from HandleMessage if the client may
+// be stuck. Only the first call has any effect. A non-positive grace closes
+// the socket right away. Must be called after OnStart.
+func (b *BaseConn[I, O]) CloseAfterSend(code int, reason string, grace time.Duration, last ...O) {
+	conn := b.wsConn
+	if conn == nil || b.Writer == nil {
+		return
+	}
+	timer := time.AfterFunc(grace, func() { conn.Close() })
+	if !b.closeTimer.CompareAndSwap(nil, timer) {
+		timer.Stop()
+		return
+	}
+	for _, m := range last {
+		b.SendOutput(m)
+	}
+	b.Writer.Send(OutgoingMessage[O]{Close: &CloseData{Code: code, Reason: reason}})
 }

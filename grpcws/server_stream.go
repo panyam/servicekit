@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	gohttp "github.com/panyam/servicekit/http"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -44,7 +43,7 @@ func (c *ServerStreamConn[Req, Resp, Stream]) forwardResponses() {
 	for {
 		resp, err := c.stream.Recv()
 		if err == io.EOF {
-			c.sendStreamEnd()
+			c.endStream()
 			return
 		}
 		if err != nil {
@@ -112,6 +111,9 @@ type ServerStreamHandler[Req proto.Message, Resp proto.Message, Stream ServerStr
 
 	// UnmarshalOptions for protojson decoding (optional)
 	UnmarshalOptions protojson.UnmarshalOptions
+
+	// ConnOptions controls closing on stream end and write timeouts.
+	ConnOptions
 }
 
 // Validate implements WSHandler. Parses the request and creates the gRPC stream.
@@ -145,14 +147,9 @@ func (h *ServerStreamHandler[Req, Resp, Stream]) Validate(
 	}
 
 	conn := &ServerStreamConn[Req, Resp, Stream]{
-		baseGRPCConn: baseGRPCConn{
-			BaseConn: gohttp.BaseConn[ControlMessage, ControlMessage]{
-				Codec:   codec,
-				NameStr: "ServerStreamConn",
-			},
-		},
-		stream: stream,
-		codec:  codec,
+		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ServerStreamConn"),
+		stream:       stream,
+		codec:        codec,
 	}
 
 	conn.initContext(ctx)

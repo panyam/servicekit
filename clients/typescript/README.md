@@ -63,8 +63,8 @@ client.onMessage = (data) => {
   console.log('Received:', data);
 };
 
-client.onClose = () => {
-  console.log('Disconnected');
+client.onClose = ({ code, reason }) => {
+  console.log('Disconnected', code, reason);
 };
 
 await client.connect('ws://localhost:8080/ws');
@@ -218,7 +218,7 @@ class BaseWSClient<I = unknown, O = unknown> {
   // Events
   onMessage: (data: I) => void
   onPing: (pingId: number) => void
-  onClose: () => void
+  onClose: (info: CloseInfo) => void   // { code, reason, wasClean }
   onError: (error: string) => void
 
   // State
@@ -282,7 +282,7 @@ class GRPCWSClient {
   onMessage: (data: unknown) => void
   onStreamEnd: () => void
   onError: (error: string) => void
-  onClose: () => void
+  onClose: (info: StreamCloseInfo) => void  // CloseInfo + streamEnded
   onPing: (pingId: number) => void
 
   // State
@@ -292,6 +292,20 @@ class GRPCWSClient {
   // Testing
   static createMock(): { client: GRPCWSClient; controller: MockController }
 }
+```
+
+A server with `CloseOnStreamEnd` set sends `stream_end` and then closes with
+code 1000. `onClose` reports `streamEnded: true` in that case, so the app can
+tell a normal end from a dropped connection:
+
+```typescript
+client.onClose = ({ code, streamEnded }) => {
+  if (streamEnded && code === 1000) {
+    showSessionEnded();
+  } else {
+    showConnectionLost();
+  }
+};
 ```
 
 ### TypedGRPCWSClient<TIn, TOut>
@@ -338,6 +352,10 @@ expect(controller.sentMessages[0]).toMatchObject({ action: { case: 'join' } });
 // Simulate errors and close
 controller.simulateError('connection failed');
 controller.simulateClose(1006);
+
+// Or a server-side end: stream_end, then a normal close
+controller.simulateStreamEnd();
+controller.simulateClose(1000, 'stream_end');
 ```
 
 ### Mock BaseWSClient

@@ -17,7 +17,21 @@ import {
   MessageHandler,
   ErrorHandler,
   VoidHandler,
+  CloseInfo,
+  CloseHandler,
 } from './types';
+
+/**
+ * Close details for a grpcws stream.
+ *
+ * `streamEnded` is true when the server sent stream_end before the close.
+ * A server with `CloseOnStreamEnd` set closes with code 1000 right after
+ * stream_end, so `streamEnded && code === 1000` is a normal end of the RPC.
+ * Anything else means the connection dropped or was closed mid-stream.
+ */
+export interface StreamCloseInfo extends CloseInfo {
+  streamEnded: boolean;
+}
 
 /**
  * Mock controller for testing GRPCWSClient without real WebSocket connections.
@@ -48,8 +62,11 @@ export interface MockController {
   /** Simulate a server error (delivers {type: "error"} envelope to onError) */
   simulateError(message?: string): void;
 
-  /** Simulate WebSocket close */
-  simulateClose(code?: number): void;
+  /** Simulate the server ending the stream (delivers a {type: "stream_end"} envelope) */
+  simulateStreamEnd(): void;
+
+  /** Simulate WebSocket close. `code` defaults to 1000. */
+  simulateClose(code?: number, reason?: string): void;
 
   /** Current WebSocket ready state */
   readonly readyState: number;
@@ -96,6 +113,7 @@ export interface MockController {
  */
 export class GRPCWSClient {
   private base: BaseWSClient;
+  private streamEnded = false;
 
   /** Called when a data message is received */
   public onMessage: MessageHandler = () => {};
@@ -106,8 +124,8 @@ export class GRPCWSClient {
   /** Called when the server sends an error */
   public onError: ErrorHandler = () => {};
 
-  /** Called when the connection closes */
-  public onClose: VoidHandler = () => {};
+  /** Called when the connection closes, with the close code and whether stream_end came first */
+  public onClose: CloseHandler<StreamCloseInfo> = () => {};
 
   /** Called when a ping is received */
   public onPing: (pingId: number) => void = () => {};
@@ -123,6 +141,7 @@ export class GRPCWSClient {
    * @returns Promise that resolves when connected
    */
   connect(url: string): Promise<void> {
+    this.streamEnded = false;
     return this.base.connect(url);
   }
 
@@ -233,8 +252,12 @@ export class GRPCWSClient {
         );
       },
 
-      simulateClose(code?: number) {
-        wsCtrl.simulateClose(code);
+      simulateStreamEnd() {
+        wsCtrl.simulateRawMessage(JSON.stringify({ type: 'stream_end' }));
+      },
+
+      simulateClose(code?: number, reason?: string) {
+        wsCtrl.simulateClose(code, reason);
       },
 
       get readyState(): number {
@@ -253,8 +276,8 @@ export class GRPCWSClient {
       this.handleEnvelopeMessage(msg);
     };
 
-    this.base.onClose = () => {
-      this.onClose();
+    this.base.onClose = (info: CloseInfo) => {
+      this.onClose({ ...info, streamEnded: this.streamEnded });
     };
 
     this.base.onError = (error: string) => {
@@ -284,6 +307,7 @@ export class GRPCWSClient {
         break;
 
       case 'stream_end':
+        this.streamEnded = true;
         this.onStreamEnd();
         break;
 

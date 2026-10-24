@@ -89,6 +89,22 @@ export type ErrorHandler = (error: string) => void;
 export type VoidHandler = () => void;
 
 /**
+ * Why the WebSocket closed, taken from the browser's CloseEvent.
+ *
+ * `code` is the close code the server sent (1000 for a normal close), or
+ * 1006 when the connection dropped without a close frame. `wasClean` is
+ * false in that case.
+ */
+export interface CloseInfo {
+  code: number;
+  reason: string;
+  wasClean: boolean;
+}
+
+/** Called when the connection closes, with the reason. */
+export type CloseHandler<T extends CloseInfo = CloseInfo> = (info: T) => void;
+
+/**
  * Codec interface for encoding/decoding data messages.
  * This mirrors the server-side Codec interface.
  *

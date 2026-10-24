@@ -161,6 +161,53 @@ func (m *StreamMetrics) Received() int64 {
 	return m.MsgsReceived.Load()
 }
 
+// DefaultCloseGracePeriod is how long a CloseOnStreamEnd connection waits for
+// the client to answer the close frame before closing the socket itself.
+const DefaultCloseGracePeriod = 2 * time.Second
+
+// ConnOptions holds the connection settings shared by the server, client and
+// bidi stream handlers. It is embedded in each handler, so the fields can be
+// set directly on the handler. The zero value keeps the original behaviour:
+// the socket stays open after stream_end and writes have no deadline.
+type ConnOptions struct {
+	// CloseOnStreamEnd closes the WebSocket once the RPC finishes. After the
+	// stream_end frame the server sends a close frame (1000, "stream_end")
+	// and the connection ends, running OnClose. Without it the socket stays
+	// open until the client closes it or the pong timeout fires.
+	//
+	// A bidi or server stream finishes when Recv returns io.EOF. A client
+	// stream finishes after the response that follows end_send.
+	CloseOnStreamEnd bool
+
+	// CloseGracePeriod bounds how long CloseOnStreamEnd waits for the client
+	// to read the final frames and answer the close. After that the socket is
+	// closed regardless, which is what frees a client that stopped reading.
+	// Zero means DefaultCloseGracePeriod.
+	CloseGracePeriod time.Duration
+
+	// WriteTimeout bounds each write to the client (see
+	// gohttp.BaseConn.WriteTimeout). A client that stops reading while the
+	// stream is still producing is dropped once a write times out. Zero means
+	// no deadline.
+	WriteTimeout time.Duration
+}
+
+func (o ConnOptions) newBaseConn(codec gohttp.Codec[ControlMessage, ControlMessage], name string) baseGRPCConn {
+	grace := o.CloseGracePeriod
+	if grace <= 0 {
+		grace = DefaultCloseGracePeriod
+	}
+	return baseGRPCConn{
+		BaseConn: gohttp.BaseConn[ControlMessage, ControlMessage]{
+			Codec:        codec,
+			NameStr:      name,
+			WriteTimeout: o.WriteTimeout,
+		},
+		closeOnStreamEnd: o.CloseOnStreamEnd,
+		closeGrace:       grace,
+	}
+}
+
 // ============================================================================
 // Base gRPC-WS Connection
 // ============================================================================
@@ -172,6 +219,9 @@ type baseGRPCConn struct {
 	streamCtx  context.Context
 	cancelFunc context.CancelFunc
 	metrics    StreamMetrics
+
+	closeOnStreamEnd bool
+	closeGrace       time.Duration
 }
 
 // initContext creates a cancellable context for the gRPC stream
@@ -208,6 +258,17 @@ func (c *baseGRPCConn) sendStreamEnd() {
 	c.SendOutput(ControlMessage{
 		Type: TypeStreamEnd,
 	})
+}
+
+// endStream tells the client the RPC is done and, with CloseOnStreamEnd,
+// closes the socket behind the stream_end frame.
+func (c *baseGRPCConn) endStream() {
+	if !c.closeOnStreamEnd {
+		c.sendStreamEnd()
+		return
+	}
+	c.CloseAfterSend(websocket.CloseNormalClosure, TypeStreamEnd, c.closeGrace,
+		ControlMessage{Type: TypeStreamEnd})
 }
 
 // OnStart initializes the base connection

@@ -208,6 +208,42 @@ config := &gohttp.WSConnConfig{
 router.HandleFunc("/ws/v1/stream", gohttp.WSServe(handler, config))
 ```
 
+### Closing the Socket When the Stream Ends
+
+By default the WebSocket stays open after `stream_end`. The client closes it, or
+the pong timeout does (5 minutes by default). To have the server close it, set
+`CloseOnStreamEnd` on the handler:
+
+```go
+handler := grpcws.NewBidiStreamHandler(createStream, newRequest)
+handler.CloseOnStreamEnd = true
+handler.CloseGracePeriod = 2 * time.Second // the default
+```
+
+When the stream finishes (`Recv` returns `io.EOF` for server and bidi streams,
+or the response after `end_send` for client streams), the server sends
+`stream_end`, then a close frame with code 1000 and reason `stream_end`. A
+client that answers the close ends the connection right away. One that has
+stopped reading gets its socket closed after `CloseGracePeriod`. Either way
+`OnClose` runs and the stream context is cancelled.
+
+This lets a server end a session on its own terms, for example evicting a slow
+consumer: return `io.EOF` from the stream's `Recv`, and the client sees
+`stream_end` and a normal close instead of a dropped connection.
+
+### Write Timeout for Slow Clients
+
+A client that stops reading fills its TCP window, and the next write blocks
+until the pong timeout. Set `WriteTimeout` to drop such a client sooner:
+
+```go
+handler.WriteTimeout = 10 * time.Second
+```
+
+A write that misses the deadline closes the socket and `OnClose` runs. The zero
+value means no deadline. The same field exists on `gohttp.BaseConn` for
+non-grpcws connections.
+
 ## Metrics
 
 Each connection tracks metrics via `StreamMetrics`:
