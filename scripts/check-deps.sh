@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The packages a JSON-only WebSocket/SSE server imports must not pull in grpc,
-# protobuf, Connect or gorm. Those live in grpcws/, http/protocodec/,
-# http/grpcutil/, connectbridge/, auth/ and the hybrid/ module. Fails with the
+# protobuf, Connect, gorm or Prometheus. Those live in grpcws/,
+# http/protocodec/, http/grpcutil/, prom/ and the hybrid/ module. Fails with the
 # offending packages and the path that brings each one in. CI runs it.
 #
 #   scripts/check-deps.sh
@@ -11,7 +11,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
 lean=(./http ./middleware)
-heavy='^(google\.golang\.org/(grpc|protobuf|genproto)|connectrpc\.com|gorm\.io)(/|$)'
+heavy='^(google\.golang\.org/(grpc|protobuf|genproto)|connectrpc\.com|gorm\.io|github\.com/prometheus)(/|$)'
 
 bad=$(go list -deps "${lean[@]}" | grep -E "$heavy" || true)
 if [ -n "$bad" ]; then
