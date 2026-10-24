@@ -26,11 +26,13 @@ type Client struct {
 	Stuck bool
 
 	received atomic.Int64
+	count    func([]byte) bool
 	ended    chan struct{}
 	endErr   error
 }
 
-// Received is how many data frames this client has read.
+// Received is how many data frames this client has read (those that pass
+// Options.Count, if set).
 func (c *Client) Received() int64 { return c.received.Load() }
 
 // Ended is closed when the client's read loop stops, because the server
@@ -56,6 +58,9 @@ type Options struct {
 	// URLFor, if set, gives client i its own URL (a player id in the
 	// query, say) instead of the one passed to Dial.
 	URLFor func(i int) string
+
+	// Count, if set, picks which frames Received counts. Nil counts all.
+	Count func(frame []byte) bool
 
 	// Parallel bounds concurrent dials. Zero means 32, which stays under
 	// the default listen backlog on macOS.
@@ -105,7 +110,7 @@ func Dial(ctx context.Context, url string, opts Options) (*Pool, error) {
 					return
 				}
 			}
-			c := &Client{Conn: conn, Stuck: i >= opts.Clients-opts.Stuck, ended: make(chan struct{})}
+			c := &Client{Conn: conn, Stuck: i >= opts.Clients-opts.Stuck, count: opts.Count, ended: make(chan struct{})}
 			if !c.Stuck {
 				go c.readLoop()
 			}
@@ -124,11 +129,14 @@ func Dial(ctx context.Context, url string, opts Options) (*Pool, error) {
 func (c *Client) readLoop() {
 	defer close(c.ended)
 	for {
-		if _, _, err := c.Conn.ReadMessage(); err != nil {
+		_, frame, err := c.Conn.ReadMessage()
+		if err != nil {
 			c.endErr = err
 			return
 		}
-		c.received.Add(1)
+		if c.count == nil || c.count(frame) {
+			c.received.Add(1)
+		}
 	}
 }
 
@@ -150,6 +158,24 @@ func (p *Pool) Received() int64 {
 		n += c.Received()
 	}
 	return n
+}
+
+// Slowest is the lowest Received among readers still connected, and false
+// if none are.
+func (p *Pool) Slowest() (int64, bool) {
+	var low int64
+	found := false
+	for _, c := range p.Readers() {
+		select {
+		case <-c.ended:
+			continue
+		default:
+		}
+		if n := c.Received(); !found || n < low {
+			low, found = n, true
+		}
+	}
+	return low, found
 }
 
 // WaitEach waits until every reader has read at least n frames.

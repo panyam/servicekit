@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/panyam/servicekit/cmd/grpcws-demo/gen"
@@ -66,6 +66,7 @@ func runExercise(o exerciseOpts) error {
 	pool, err := loadtest.Dial(context.Background(), "", loadtest.Options{
 		Clients: o.clients,
 		Stuck:   o.stuck,
+		Count:   func(frame []byte) bool { return bytes.Contains(frame, []byte(`"chat-`)) },
 		URLFor: func(i int) string {
 			return fmt.Sprintf("ws://%s/ws/v1/%s/subscribe?player_id=%s", addr, exerciseGame, player(i))
 		},
@@ -87,34 +88,50 @@ func runExercise(o exerciseOpts) error {
 	step("%d subscribers connected (%d will never read)", o.clients, o.stuck)
 
 	// Broadcast big chat messages until every stuck client has been dropped.
+	// Each one waits for the slowest live reader to be within a few messages,
+	// so only the stuck clients fall behind, however fast the machine is.
 	room := hub.GetOrCreateRoom(exerciseGame)
 	big := strings.Repeat("x", o.payload)
-	stop := make(chan struct{})
-	var broadcasts atomic.Int64
-	go func() {
-		t := time.NewTicker(20 * time.Millisecond)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-t.C:
-				n := broadcasts.Add(1)
-				room.eventsChan <- &gen.GameEvent{
-					EventId:   fmt.Sprintf("chat-%d", n),
-					EventType: "chat",
-					GameId:    exerciseGame,
-					Payload:   &gen.GameEvent_ChatMessage{ChatMessage: &gen.ChatMessage{PlayerId: "driver", Message: big}},
+	const window = 4
+	broadcasts := 0
+	dropDeadline := time.Now().Add(60 * time.Second)
+	for {
+		if snap, err := m.scrape(); err != nil {
+			return err
+		} else if snap[closed("write_timeout")] >= float64(o.stuck) {
+			break
+		}
+		if time.Now().After(dropDeadline) {
+			return m.waitFor(closed("write_timeout"), float64(o.stuck), 0)
+		}
+		for range 5 {
+			// The room drops a chat for a player whose queue is full, so a
+			// reader can stay behind for good. Stop waiting once deliveries
+			// stall as well.
+			catchUp := time.Now().Add(5 * time.Second)
+			last, lastMoved := pool.Received(), time.Now()
+			for {
+				low, ok := pool.Slowest()
+				if !ok || low >= int64(broadcasts-window) || time.Now().After(catchUp) {
+					break
 				}
+				if n := pool.Received(); n != last {
+					last, lastMoved = n, time.Now()
+				} else if time.Since(lastMoved) > 20*time.Millisecond {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			broadcasts++
+			room.eventsChan <- &gen.GameEvent{
+				EventId:   fmt.Sprintf("chat-%d", broadcasts),
+				EventType: "chat",
+				GameId:    exerciseGame,
+				Payload:   &gen.GameEvent_ChatMessage{ChatMessage: &gen.ChatMessage{PlayerId: "driver", Message: big}},
 			}
 		}
-	}()
-	err = m.waitFor(closed("write_timeout"), float64(o.stuck), 60*time.Second)
-	close(stop)
-	if err != nil {
-		return err
 	}
-	step("broadcast %d x %dKB; the %d stuck subscribers were dropped", broadcasts.Load(), o.payload>>10, o.stuck)
+	step("broadcast %d x %dKB; the %d stuck subscribers were dropped", broadcasts, o.payload>>10, o.stuck)
 
 	var checks []check
 	snap, err := m.scrape()
