@@ -35,6 +35,10 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **`conc.Reader` reports `net.ErrClosed` only on `ClosedChan()`**, never on `OutputChan()`. `WSHandleConn` selects on both. A clean client close (1000) lands there too, because the read wrapper maps it to `net.ErrClosed`.
 - **Stuck-client tests need big frames** — loopback socket buffers absorbed 1.8M small frames (~70MB) without blocking. Use 256KB+ payloads (e.g. `wrapperspb.String`) so writes actually block.
 
+## Issues and missions
+
+Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.claude/skills/retriage/queue.sh` prints the queue. There are two active missions: #51 `mission_observable_relay` (relay metrics under load, exercise is `make exercise`, which #13 creates) and #52 `mission_massrelay_eviction` (exercise is massrelay's `make test-interop`, pending panyam/massrelay#50). A new issue gets one of `P0`–`P3` and either a mission link or `waiting` with its trigger.
+
 ## Project Docs
 
 | File | Purpose |
