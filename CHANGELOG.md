@@ -30,6 +30,14 @@ clients that stop reading. Needed by massrelay to evict slow consumers
   timeout. A peer close also ends the loop when `OnError` swallows errors.
 - A failed write on `BaseConn` now closes the socket. Before, the Writer
   stopped but the read loop kept the connection open.
+- TS client: a browser bundle of `@panyam/servicekit-client` imported nothing.
+  The `browser` field named the IIFE script build, which has no exports, and
+  esbuild prefers that field over `module` for a browser, so every named
+  import was `undefined` (issue 46). The package now has an `exports` map
+  whose `import`, `browser` and `default` conditions name `dist/index.mjs`
+  and whose `require` names `dist/index.js`. The script build moved to the
+  `unpkg` and `jsdelivr` fields, and `./dist/*` and `./package.json` stay
+  reachable by path. CI now builds the client before its tests.
 
 ## [v0.1.11] - 2026-10-23
 
