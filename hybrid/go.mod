@@ -6,7 +6,7 @@ require (
 	connectrpc.com/connect/v2 v2.0.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.32.0
-	github.com/panyam/servicekit v0.1.12
+	github.com/panyam/servicekit v0.2.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
