@@ -47,7 +47,7 @@ function createMockWSPair() {
         }
         close() {
             this.readyState = types_1.ReadyState.CLOSED;
-            this.onclose?.({});
+            this.onclose?.({ code: 1000, reason: '', wasClean: true });
         }
         get sentRaw() {
             return this._sent;
@@ -74,10 +74,10 @@ function createMockWSPair() {
             assertConnected('simulateWsError');
             ws.onerror?.({});
         },
-        simulateClose(code) {
+        simulateClose(code = 1000, reason = '') {
             assertConnected('simulateClose');
             ws.readyState = types_1.ReadyState.CLOSED;
-            ws.onclose?.({});
+            ws.onclose?.({ code, reason, wasClean: code !== 1006 });
         },
         get readyState() {
             return ws?.readyState ?? types_1.ReadyState.CLOSED;

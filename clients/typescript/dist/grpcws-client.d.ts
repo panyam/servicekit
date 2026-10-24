@@ -8,7 +8,18 @@
  *
  * Uses BaseWSClient for connection and ping/pong handling.
  */
-import { ClientOptions, MessageHandler, ErrorHandler, VoidHandler } from './types';
+import { ClientOptions, MessageHandler, ErrorHandler, VoidHandler, CloseInfo, CloseHandler } from './types';
+/**
+ * Close details for a grpcws stream.
+ *
+ * `streamEnded` is true when the server sent stream_end before the close.
+ * A server with `CloseOnStreamEnd` set closes with code 1000 right after
+ * stream_end, so `streamEnded && code === 1000` is a normal end of the RPC.
+ * Anything else means the connection dropped or was closed mid-stream.
+ */
+export interface StreamCloseInfo extends CloseInfo {
+    streamEnded: boolean;
+}
 /**
  * Mock controller for testing GRPCWSClient without real WebSocket connections.
  *
@@ -34,8 +45,10 @@ export interface MockController {
     simulateMessage(data: unknown): void;
     /** Simulate a server error (delivers {type: "error"} envelope to onError) */
     simulateError(message?: string): void;
-    /** Simulate WebSocket close */
-    simulateClose(code?: number): void;
+    /** Simulate the server ending the stream (delivers a {type: "stream_end"} envelope) */
+    simulateStreamEnd(): void;
+    /** Simulate WebSocket close. `code` defaults to 1000. */
+    simulateClose(code?: number, reason?: string): void;
     /** Current WebSocket ready state */
     readonly readyState: number;
 }
@@ -80,14 +93,15 @@ export interface MockController {
  */
 export declare class GRPCWSClient {
     private base;
+    private streamEnded;
     /** Called when a data message is received */
     onMessage: MessageHandler;
     /** Called when the stream ends normally */
     onStreamEnd: VoidHandler;
     /** Called when the server sends an error */
     onError: ErrorHandler;
-    /** Called when the connection closes */
-    onClose: VoidHandler;
+    /** Called when the connection closes, with the close code and whether stream_end came first */
+    onClose: CloseHandler<StreamCloseInfo>;
     /** Called when a ping is received */
     onPing: (pingId: number) => void;
     constructor(options?: ClientOptions);

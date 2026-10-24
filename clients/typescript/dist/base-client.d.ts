@@ -6,7 +6,7 @@
  *
  * Use this directly for http/JSONConn servers, or as the base for GRPCWSClient.
  */
-import { ClientOptions, Codec, MessageHandler, ErrorHandler, VoidHandler } from './types';
+import { ClientOptions, Codec, MessageHandler, ErrorHandler, CloseHandler } from './types';
 /**
  * Base WebSocket client with automatic ping/pong heartbeat handling.
  *
@@ -20,7 +20,7 @@ import { ClientOptions, Codec, MessageHandler, ErrorHandler, VoidHandler } from 
  * ```typescript
  * const client = new BaseWSClient();
  * client.onMessage = (data) => console.log('Received:', data);
- * client.onClose = () => console.log('Disconnected');
+ * client.onClose = ({ code, reason }) => console.log('Disconnected', code, reason);
  * await client.connect('ws://localhost:8080/ws');
  * client.send({ hello: 'world' });
  * ```
@@ -34,8 +34,8 @@ export declare class BaseWSClient<I = unknown, O = unknown> {
     onMessage: MessageHandler<I>;
     /** Called when a ping is received (after auto-pong if enabled) */
     onPing: (pingId: number) => void;
-    /** Called when the connection closes */
-    onClose: VoidHandler;
+    /** Called when the connection closes, with the close code and reason */
+    onClose: CloseHandler;
     /** Called when a WebSocket error occurs */
     onError: ErrorHandler;
     constructor(options?: ClientOptions<I, O>);

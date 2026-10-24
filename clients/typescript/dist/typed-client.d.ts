@@ -8,7 +8,8 @@
  * - ts-proto
  * - etc.
  */
-import { ClientOptions, VoidHandler, ErrorHandler } from './types';
+import { StreamCloseInfo } from './grpcws-client';
+import { ClientOptions, VoidHandler, ErrorHandler, CloseHandler } from './types';
 /**
  * Type-safe gRPC-WebSocket client with generic input/output types.
  *
@@ -52,8 +53,8 @@ export declare class TypedGRPCWSClient<TIn, TOut> {
     onStreamEnd: VoidHandler;
     /** Called when the server sends an error */
     onError: ErrorHandler;
-    /** Called when the connection closes */
-    onClose: VoidHandler;
+    /** Called when the connection closes, with the close code and whether stream_end came first */
+    onClose: CloseHandler<StreamCloseInfo>;
     /** Called when a ping is received */
     onPing: (pingId: number) => void;
     constructor(options?: ClientOptions);

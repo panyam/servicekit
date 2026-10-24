@@ -55,7 +55,7 @@ class TypedGRPCWSClient {
         this.onStreamEnd = () => { };
         /** Called when the server sends an error */
         this.onError = () => { };
-        /** Called when the connection closes */
+        /** Called when the connection closes, with the close code and whether stream_end came first */
         this.onClose = () => { };
         /** Called when a ping is received */
         this.onPing = () => { };
@@ -121,8 +121,8 @@ class TypedGRPCWSClient {
         this.client.onError = (error) => {
             this.onError(error);
         };
-        this.client.onClose = () => {
-            this.onClose();
+        this.client.onClose = (info) => {
+            this.onClose(info);
         };
         this.client.onPing = (pingId) => {
             this.onPing(pingId);

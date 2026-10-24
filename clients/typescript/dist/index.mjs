@@ -44,7 +44,7 @@ var BaseWSClient = class {
     /** Called when a ping is received (after auto-pong if enabled) */
     this.onPing = () => {
     };
-    /** Called when the connection closes */
+    /** Called when the connection closes, with the close code and reason */
     this.onClose = () => {
     };
     /** Called when a WebSocket error occurs */
@@ -84,8 +84,12 @@ var BaseWSClient = class {
         this.onError(errorMsg);
         reject(new Error(errorMsg));
       };
-      this.ws.onclose = () => {
-        this.onClose();
+      this.ws.onclose = (event) => {
+        this.onClose({
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean
+        });
       };
       this.ws.onmessage = (event) => {
         this.handleRawMessage(event.data);
@@ -215,7 +219,7 @@ function createMockWSPair() {
     }
     close() {
       this.readyState = ReadyState.CLOSED;
-      this.onclose?.({});
+      this.onclose?.({ code: 1e3, reason: "", wasClean: true });
     }
     get sentRaw() {
       return this._sent;
@@ -241,10 +245,10 @@ function createMockWSPair() {
       assertConnected("simulateWsError");
       ws.onerror?.({});
     },
-    simulateClose(code) {
+    simulateClose(code = 1e3, reason = "") {
       assertConnected("simulateClose");
       ws.readyState = ReadyState.CLOSED;
-      ws.onclose?.({});
+      ws.onclose?.({ code, reason, wasClean: code !== 1006 });
     },
     get readyState() {
       return ws?.readyState ?? ReadyState.CLOSED;
@@ -259,6 +263,7 @@ function createMockWSPair() {
 // src/grpcws-client.ts
 var GRPCWSClient = class _GRPCWSClient {
   constructor(options = {}) {
+    this.streamEnded = false;
     /** Called when a data message is received */
     this.onMessage = () => {
     };
@@ -268,7 +273,7 @@ var GRPCWSClient = class _GRPCWSClient {
     /** Called when the server sends an error */
     this.onError = () => {
     };
-    /** Called when the connection closes */
+    /** Called when the connection closes, with the close code and whether stream_end came first */
     this.onClose = () => {
     };
     /** Called when a ping is received */
@@ -283,6 +288,7 @@ var GRPCWSClient = class _GRPCWSClient {
    * @returns Promise that resolves when connected
    */
   connect(url) {
+    this.streamEnded = false;
     return this.base.connect(url);
   }
   /**
@@ -380,8 +386,11 @@ var GRPCWSClient = class _GRPCWSClient {
           JSON.stringify({ type: "error", error: message ?? "Mock error" })
         );
       },
-      simulateClose(code) {
-        wsCtrl.simulateClose(code);
+      simulateStreamEnd() {
+        wsCtrl.simulateRawMessage(JSON.stringify({ type: "stream_end" }));
+      },
+      simulateClose(code, reason) {
+        wsCtrl.simulateClose(code, reason);
       },
       get readyState() {
         return wsCtrl.readyState;
@@ -396,8 +405,8 @@ var GRPCWSClient = class _GRPCWSClient {
     this.base.onMessage = (msg) => {
       this.handleEnvelopeMessage(msg);
     };
-    this.base.onClose = () => {
-      this.onClose();
+    this.base.onClose = (info) => {
+      this.onClose({ ...info, streamEnded: this.streamEnded });
     };
     this.base.onError = (error) => {
       this.onError(error);
@@ -420,6 +429,7 @@ var GRPCWSClient = class _GRPCWSClient {
         this.onMessage(controlMsg.data);
         break;
       case "stream_end":
+        this.streamEnded = true;
         this.onStreamEnd();
         break;
       case "error":
@@ -449,7 +459,7 @@ var TypedGRPCWSClient = class {
     /** Called when the server sends an error */
     this.onError = () => {
     };
-    /** Called when the connection closes */
+    /** Called when the connection closes, with the close code and whether stream_end came first */
     this.onClose = () => {
     };
     /** Called when a ping is received */
@@ -516,8 +526,8 @@ var TypedGRPCWSClient = class {
     this.client.onError = (error) => {
       this.onError(error);
     };
-    this.client.onClose = () => {
-      this.onClose();
+    this.client.onClose = (info) => {
+      this.onClose(info);
     };
     this.client.onPing = (pingId) => {
       this.onPing(pingId);

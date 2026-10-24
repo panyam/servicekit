@@ -32,8 +32,11 @@ export interface MockWSController {
     simulateRawMessage(data: string | ArrayBuffer): void;
     /** Simulate a WebSocket error event */
     simulateWsError(): void;
-    /** Simulate WebSocket close */
-    simulateClose(code?: number): void;
+    /**
+     * Simulate WebSocket close. `code` defaults to 1000. Any code other than
+     * 1006 counts as a clean close, as in the browser.
+     */
+    simulateClose(code?: number, reason?: string): void;
     /** Current WebSocket ready state */
     readonly readyState: number;
 }
