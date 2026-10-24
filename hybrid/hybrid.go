@@ -10,7 +10,7 @@
 // fields are emitted:
 //
 //   - grpc-gateway emits them (EmitUnpopulated: true).
-//   - Connect's JSON codec and grpcws omit them.
+//   - Connect's JSON codec (v2) and grpcws omit them.
 //
 // So the same Game{score: 0} comes back as {"score":0, ...} from the gateway and
 // without "score" from the other two. ProtoJSON holds one set of options and
@@ -26,7 +26,9 @@
 //
 //	m := hybrid.NewMux()
 //	m.Gateway("/v1/", gw)
-//	m.Connect(genconnect.NewGameServiceHandler(connectImpl, pj.ConnectOption()))
+//	cs := connect.NewServer()
+//	genconnect.RegisterGameServiceHandler(cs, connectImpl)
+//	m.Connect(cs, pj.ConnectOption())
 //	m.Handle("/ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
 //	http.ListenAndServe(addr, m.Handler(middleware.NewRequestID().Middleware))
 //
@@ -35,11 +37,15 @@
 package hybrid
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
+	"connectrpc.com/connect/v2/connectproto"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -64,32 +70,45 @@ func (p ProtoJSON) GatewayOption() runtime.ServeMuxOption {
 	})
 }
 
-// ConnectOption replaces Connect's "json" codec with one using these options.
-// Pass it to the generated New<Service>Handler (or to a Connect client). The
-// binary "proto" codec is untouched.
-func (p ProtoJSON) ConnectOption() connect.Option {
-	return connect.WithCodec(connectJSON{p})
+// ConnectOption sets the codecs Connect (v2) serves: binary protobuf, as by
+// default, and a "json" codec using these options in place of Connect's own.
+// Pass it to Mux.Connect or connecthttp.Mount. connecthttp.WithCodecs replaces
+// the default codec list, so passing a second WithCodecs after this one drops
+// these codecs.
+func (p ProtoJSON) ConnectOption() connecthttp.Option {
+	return connecthttp.WithCodecs(connectproto.NewBinaryCodec(), connectJSON{p})
 }
 
 type connectJSON struct{ p ProtoJSON }
 
 func (connectJSON) Name() string { return "json" }
 
-func (c connectJSON) Marshal(v any) ([]byte, error) {
-	msg, ok := v.(proto.Message)
-	if !ok {
-		return nil, fmt.Errorf("hybrid: %T is not a proto.Message", v)
-	}
-	return c.p.Marshal.Marshal(msg)
-}
-
-func (c connectJSON) Unmarshal(data []byte, v any) error {
+func (c connectJSON) MarshalWrite(_ context.Context, dst io.Writer, v any) error {
 	msg, ok := v.(proto.Message)
 	if !ok {
 		return fmt.Errorf("hybrid: %T is not a proto.Message", v)
 	}
+	data, err := c.p.Marshal.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	_, err = dst.Write(data)
+	return err
+}
+
+func (c connectJSON) UnmarshalRead(_ context.Context, src io.Reader, v any) error {
+	msg, ok := v.(proto.Message)
+	if !ok {
+		return fmt.Errorf("hybrid: %T is not a proto.Message", v)
+	}
+	data, err := io.ReadAll(src)
+	if err != nil {
+		return err
+	}
 	return c.p.Unmarshal.Unmarshal(data, msg)
 }
+
+var _ connect.Codec = connectJSON{}
 
 // Mux routes grpcws endpoints, a grpc-gateway ServeMux and Connect handlers
 // on one http.ServeMux, so one middleware chain covers all of them.
@@ -123,11 +142,11 @@ func (m *Mux) Gateway(prefix string, gw *runtime.ServeMux) {
 	m.mux.Handle(prefix, gw)
 }
 
-// Connect mounts a Connect handler. Its arguments match what a generated
-// New<Service>Handler returns: the service path ("/pkg.Service/") and the
-// handler.
-func (m *Mux) Connect(path string, h http.Handler) {
-	m.mux.Handle(path, h)
+// Connect mounts every procedure registered on a Connect (v2) server, plus
+// Connect's per-service catch-all for unknown methods. opts go to
+// connecthttp.Mount; pass ProtoJSON.ConnectOption there for shared JSON.
+func (m *Mux) Connect(server *connect.Server, opts ...connecthttp.Option) {
+	connecthttp.Mount(m.mux, server, opts...)
 }
 
 // Handler returns the routes wrapped in mw, with the first middleware

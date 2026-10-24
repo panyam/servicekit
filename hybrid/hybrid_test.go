@@ -1,6 +1,8 @@
 package hybrid
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,11 +16,11 @@ func TestConnectJSONRejectsNonProto(t *testing.T) {
 	if c.Name() != "json" {
 		t.Fatalf("codec name %q, want json (Connect looks it up by name)", c.Name())
 	}
-	if _, err := c.Marshal(struct{}{}); err == nil {
-		t.Error("Marshal of a non-proto value should fail")
+	if err := c.MarshalWrite(context.Background(), io.Discard, struct{}{}); err == nil {
+		t.Error("MarshalWrite of a non-proto value should fail")
 	}
-	if err := c.Unmarshal([]byte(`{}`), &struct{}{}); err == nil {
-		t.Error("Unmarshal into a non-proto value should fail")
+	if err := c.UnmarshalRead(context.Background(), strings.NewReader(`{}`), &struct{}{}); err == nil {
+		t.Error("UnmarshalRead into a non-proto value should fail")
 	}
 }
 
@@ -34,7 +36,7 @@ func TestMuxGatewayPrefixMustEndInSlash(t *testing.T) {
 func TestMuxGatewayDoesNotSwallowOtherRoutes(t *testing.T) {
 	m := NewMux()
 	m.Gateway("/v1/", runtime.NewServeMux())
-	m.Connect("/pkg.Service/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("connect")) }))
+	m.Handle("/pkg.Service/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("connect")) }))
 	m.Handle("GET /ws/watch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ws")) }))
 	h := m.Handler()
 	for path, want := range map[string]string{"/pkg.Service/Get": "connect", "/ws/watch": "ws"} {

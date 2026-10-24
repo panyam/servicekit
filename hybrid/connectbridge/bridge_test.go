@@ -132,3 +132,15 @@ func TestMetadataMethods_AreNoOps(t *testing.T) {
 	}
 	bridge.SetTrailer(md) // must not panic
 }
+
+func TestNewConnectStreamBridge_AcceptsAnySender(t *testing.T) {
+	fake := &fakeSender[string]{}
+	bridge := NewConnectStreamBridge[string](context.Background(), fake)
+	msg := "hi"
+	if err := bridge.Send(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.sent) != 1 || *fake.sent[0] != "hi" {
+		t.Fatalf("got %v", fake.sent)
+	}
+}
