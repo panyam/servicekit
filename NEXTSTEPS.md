@@ -1,54 +1,14 @@
-# Next Steps
+# Next steps
 
-## Immediate Tasks
+Where each line of work left off. Work items live in GitHub issues; this file points at them.
+Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
-- [x] Update code comments and godoc for all new files
-- [x] Create TypeScript client library (`@panyam/servicekit-client`)
-- [x] Update grpcws-demo to use the new client library
-- [x] Fix concurrent write panic (OutgoingMessage union type)
-- [x] Separate transport layer from codec layer (pings always JSON)
-- [x] Add client-side codec support (JSONCodec, BinaryCodec)
-- [x] Create multiplayer demo with gameId-based rooms
-- [x] Manual browser testing of grpcws-demo multiplayer
-- [x] Create LLMGUIDE.md for LLM discoverability
-- [x] Publish TypeScript client to npm (@panyam/servicekit-client)
-- [x] Add TypeScript SSE client: SSEClient, StreamableClient, vendored parser (issue #10)
+## At a glance
 
-## Future Enhancements
+- master — no open thread. v0.1.12 is being cut for #47 (PR #48) and #46 (PR #49).
+- This run: converted the old TODO checklist. Its open items were already issues #11 to #17. Dropped the fix/issue-46-browser-field and feat/issue-47-close-on-stream-end work, since PRs #49 and #48 merged.
 
-### Testing
-- [x] Add `GRPCWSClient.createMock()` test utility (issue #1)
-- [x] Add reusable `MockWebSocket` + `MockWSController` in `mock.ts`
-- [x] Add integration tests for grpcws over real WebSocket connections (issue #9)
-- [ ] Add load tests for concurrent WebSocket connections
-- [ ] Add benchmarks comparing codec implementations
+## Across threads
 
-### Features
-- [x] Add connection pooling/limiting middleware (`middleware/` package)
-- [x] Add SSE connection type: SSEConn[O], SSEHub[O] (issue #6)
-- [x] Add graceful shutdown helper: ListenAndServeGraceful (issue #7)
-- [x] Add Streamable HTTP handler: StreamableServe (issue #8)
-- [x] Add ConnectStreamBridge[T] for Connect ↔ gRPC stream adapter (issue #30)
-- [ ] Add metrics export (Prometheus)
-- [ ] Add OpenTelemetry tracing support
-- [ ] Consider grpc-gateway integration for hybrid deployments
-
-### Middleware
-- [x] Add BodyLimiter middleware (issue #2)
-- [x] Add HealthCheck handler (issue #3)
-- [x] Add RequestID middleware (issue #4)
-- [x] Add ServerTimeouts helper (issue #5)
-- [x] Add Makefile and pre-push git hook for test automation
-- [x] Enhance RequestLogger to include request ID from context
-- [ ] Add middleware integration tests with real WebSocket connections
-- [ ] Add middleware benchmarks
-
-### Documentation
-- [x] Add examples for TypedJSONCodec usage (godoc ExampleTypedJSONCodec)
-- [x] Add examples for ProtoJSONCodec with custom options (covered in LLMGUIDE Template 3)
-- [x] Add more godoc examples (SSEServe, StreamableServe, ListenAndServeGraceful, Guard, RateLimiter, OriginChecker, ApplyDefaults, JSONCodec, TypedJSONCodec)
-- [x] Add migration guide for existing JSONConn users (UPGRADING.md)
-
-### Code Quality
-- [x] Review error handling consistency (7 bugs fixed: inverted conditions, os.Exit in library, header ordering, dead code)
-- [ ] Consider build tags for optional proto dependency (deferred: sub-package split preferred over build tags)
+- Old TODO "Consider grpc-gateway integration for hybrid deployments" has no issue yet. It needs one filed, or it gets dropped.
+- massrelay (panyam/massrelay#46) is waiting on v0.1.12. It needs both `CloseOnStreamEnd` and `WriteTimeout`, plus a lock-step bump of Go servicekit and npm servicekit-client.

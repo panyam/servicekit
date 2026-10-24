@@ -522,6 +522,8 @@ Server sends:
 {"type": "ping", "pingId": 123}
 ```
 
+With `handler.CloseOnStreamEnd = true`, `stream_end` is followed by a WebSocket close frame (1000, `"stream_end"`). The TS client's `onClose` then reports `streamEnded: true`.
+
 Client sends:
 ```json
 {"type": "data", "data": {...}}
@@ -564,3 +566,5 @@ Validate() → OnStart() → [SendOutput/SendEvent...] → OnClose()
 | Messages not received | Forgot `OnStart()` parent call | Call `c.JSONConn.OnStart(conn)` |
 | Client not responding to ping | Wrong client library | Use `GRPCWSClient` for grpcws endpoints |
 | Binary messages not working | Codec mismatch | Match client codec to server codec |
+| Socket stays open after `stream_end` | Default behaviour | Set `handler.CloseOnStreamEnd = true` |
+| Client that stopped reading holds its connection for minutes | No write deadline | Set `handler.WriteTimeout` (grpcws) or `BaseConn.WriteTimeout` |

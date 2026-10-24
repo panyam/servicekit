@@ -31,6 +31,9 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **`BaseSSEConn.Ready()`** — use `<-conn.Ready()` before sending if you get the connection reference before `OnStart` completes (e.g., from `Validate`). The `ready` channel is lazily initialized via `sync.Once`.
 - **`timestamppb.Timestamp` in protojson** — serializes as RFC 3339 string (`"1970-01-01T00:16:40Z"`), not `{"seconds":N}`. Tests must account for this.
 - **gocurrent dependency** — requires v0.0.13+ for race-free `Writer` and `Reader`. Earlier versions have data races on `isRunning` (Writer) and `closedChan` (Reader).
+- **`conc.Writer` input is unbuffered** — `Send` blocks while the Writer is stuck in a write to a client that stopped reading. Anything that must happen regardless (a hard-close timer, a deadline) has to be armed *before* the `Send`, as `BaseConn.CloseAfterSend` does. (Issue #47.)
+- **`conc.Reader` reports `net.ErrClosed` only on `ClosedChan()`**, never on `OutputChan()`. `WSHandleConn` selects on both. A clean client close (1000) lands there too, because the read wrapper maps it to `net.ErrClosed`.
+- **Stuck-client tests need big frames** — loopback socket buffers absorbed 1.8M small frames (~70MB) without blocking. Use 256KB+ payloads (e.g. `wrapperspb.String`) so writes actually block.
 
 ## Project Docs
 

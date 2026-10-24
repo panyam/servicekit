@@ -35,6 +35,17 @@ Both server and client use a two-layer architecture:
 
 **Key principle**: Control messages (ping/pong/error) are **always JSON** at the transport layer, regardless of what codec is used for data messages. This ensures consistent communication even with binary protocols.
 
+## Recent Changes (2026-10-24)
+
+### Server-side close and slow clients (Issue #47, PR #48)
+- `grpcws.ConnOptions` (embedded in all three stream handlers): `CloseOnStreamEnd` sends a 1000 close frame after `stream_end`, `CloseGracePeriod` (default 2s) caps how long a stuck client holds the socket after that, `WriteTimeout` drops a client that stops reading mid-stream
+- `http.BaseConn.WriteTimeout` and `CloseAfterSend(code, reason, grace, last...)`. A failed write now closes the socket
+- `WSHandleConn` fix: a clean client close or a server-side `conn.Close()` used to hang until the pong timeout (the Reader reports `net.ErrClosed` only on `ClosedChan`)
+- TS client: `onClose(info)` gets `{code, reason, wasClean}`, plus `streamEnded` on the grpcws clients. Driven by massrelay evicting slow consumers
+
+### TS client exports map (Issue #46, PR #49)
+- `@panyam/servicekit-client` resolves to the ES build for bundlers via an `exports` map. The IIFE build moved to `unpkg`/`jsdelivr`
+
 ## Recent Changes (2026-05-20)
 
 ### Connect → gRPC Stream Bridge (Issue #30)

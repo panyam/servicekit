@@ -174,15 +174,19 @@ type BaseConn[I any, O any] struct {
     NameStr   string
     ConnIdStr string
     PingId    atomic.Int64
+    WriteTimeout time.Duration // per-write deadline; 0 = none
 }
 
 // OutgoingMessage is a union type for all outgoing messages
 type OutgoingMessage[O any] struct {
-    Data  *O        // Data message (uses codec)
-    Ping  *PingData // Ping message (always JSON)
-    Error error     // Error message (always JSON)
+    Data  *O         // Data message (uses codec)
+    Ping  *PingData  // Ping message (always JSON)
+    Error error      // Error message (always JSON)
+    Close *CloseData // WebSocket close frame (queued by CloseAfterSend)
 }
 ```
+
+A failed write closes the socket, so the read loop exits and `OnClose` runs. `CloseAfterSend` queues final messages and a close frame. It arms a hard-close timer first, because the Writer's input is unbuffered and a stuck client blocks the queueing itself.
 
 All writes go through the Writer with this union type, ensuring:
 - Thread-safe concurrent writes
@@ -260,7 +264,7 @@ servicekit/middleware/
 3. Upgrade to WebSocket
 4. Start response forwarding goroutine
 5. Handle incoming messages: data → gRPC Send, control → handle locally
-6. On stream end: send stream_end, cleanup
+6. On stream end: send stream_end (with ConnOptions.CloseOnStreamEnd, then a 1000 close frame and a hard close after CloseGracePeriod), cleanup
 ```
 
 ## Concurrency Model
@@ -270,6 +274,7 @@ servicekit/middleware/
 - **Writer**: `conc.Writer` handles concurrent sends safely
 - **gRPC forwarding**: Separate goroutine for stream responses
 - **Ping timer**: Background timer for heartbeats
+- **Close timer**: armed by `CloseAfterSend`; closes the socket if the client never answers the close frame
 
 **SSE:**
 - **Writer**: `conc.Writer` handles concurrent sends (same as WebSocket)
