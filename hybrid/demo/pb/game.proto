@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package servicekit.hybrid.demo.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/panyam/servicekit/hybrid/demo/gen;gen";
+
+// GameService is served three ways by hybrid/cmd/demo: GetGame as gateway JSON
+// (GET /v1/games/{game_id}) and as Connect, WatchGame as a grpcws stream.
+service GameService {
+  rpc GetGame(GetGameRequest) returns (Game) {
+    option (google.api.http) = {get: "/v1/games/{game_id}"};
+  }
+  rpc WatchGame(GetGameRequest) returns (stream Game);
+}
+
+message GetGameRequest {
+  string game_id = 1;
+}
+
+// Game has zero-valued fields on purpose: emitting or omitting them is where
+// differently configured protojson marshalers disagree.
+message Game {
+  string game_id = 1;
+  string display_name = 2;
+  int32 score = 3;
+  repeated string players = 4;
+}
