@@ -24,7 +24,25 @@ jobs:
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
       - run: go vet ./...
+      - run: scripts/check-deps.sh
       - run: go test -race ./...
+
+  # hybrid/ is its own module (grpc-gateway, Connect), so the root job's
+  # ./... skips it.
+  hybrid:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hybrid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: hybrid/go.mod
+          cache-dependency-path: hybrid/go.sum
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: make exercise
 
   ts-client:
     runs-on: ubuntu-latest

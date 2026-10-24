@@ -8,6 +8,7 @@
 - generic-connection: Generic BaseConn[I, O] for type-safe message handling
 - codec-system: Built-in codecs (JSON, TypedJSON, ProtoJSON, BinaryProto)
 - grpc-over-websocket: gRPC streaming over WebSocket via grpcws package
+- hybrid-transports: servicekit/hybrid submodule serves one proto service over grpcws, grpc-gateway JSON and Connect with one shared protojson config (ProtoJSON) and one router (Mux)
 - connect-to-grpc-bridge: ConnectStreamBridge[T] adapts *connect.ServerStream[T] to grpc.ServerStreamingServer[T] via connectbridge package
 - http-middleware: Guard, RateLimiter, ConnLimiter, BodyLimiter, OriginChecker, CORS, Recovery, RequestLogger, RequestID, HealthCheck
 - server-timeouts: ApplyDefaults helper for sensible http.Server timeout defaults

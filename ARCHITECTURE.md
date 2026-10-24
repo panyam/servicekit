@@ -44,7 +44,9 @@ servicekit/
 │   ├── ssehub.go           # SSEHub[O] session manager
 │   ├── graceful.go         # ListenAndServeGraceful shutdown helper
 │   ├── streamable.go       # StreamableServe (POST-that-optionally-streams)
-│   └── utils.go            # HTTP/WS utilities
+│   ├── utils.go            # HTTP/WS utilities
+│   ├── protocodec/         # ProtoJSONCodec, BinaryProtoCodec (imports protobuf)
+│   └── grpcutil/           # gRPC-status → HTTP/WS error helpers (imports grpc)
 │
 ├── grpcws/                  # gRPC-over-WebSocket
 │   ├── conn.go             # Shared types, GRPCWSCodec
@@ -57,6 +59,11 @@ servicekit/
 │                           # to satisfy grpc.ServerStreamingServer[T]
 │
 ├── middleware/               # HTTP middleware (Guard, rate limit, CORS, etc.)
+│
+├── hybrid/                  # Separate Go module: grpcws + grpc-gateway + Connect
+│   ├── hybrid.go           # ProtoJSON (one JSON config for all three), Mux
+│   ├── demo/               # GameService served three ways, plus interop tests
+│   └── cmd/demo/           # `make -C hybrid exercise`
 │
 ├── auth/                    # Authentication utilities
 │   └── flask/              # Flask session compatibility
@@ -156,8 +163,10 @@ type Codec[I any, O any] interface {
 |-------|----------|
 | `JSONCodec` | Dynamic JSON messages |
 | `TypedJSONCodec[I, O]` | Typed Go structs |
-| `ProtoJSONCodec[I, O]` | Protobuf with JSON wire format |
-| `BinaryProtoCodec[I, O]` | Protobuf with binary wire format |
+| `protocodec.ProtoJSONCodec[I, O]` | Protobuf with JSON wire format |
+| `protocodec.BinaryProtoCodec[I, O]` | Protobuf with binary wire format |
+
+`servicekit/http` and `middleware/` import nothing from grpc, protobuf, Connect or gorm. The proto codecs live in `http/protocodec` and the gRPC-status helpers in `http/grpcutil`, so a JSON-only server stays lean (9.5 MB against 14.8 MB for a minimal WebSocket server at v0.1.12). `scripts/check-deps.sh` enforces this in CI.
 
 ### BaseConn[I, O]
 

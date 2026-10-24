@@ -18,7 +18,7 @@ with automatic connection management, heartbeat detection, and lifecycle hooks.
   - Thread-safe message broadcasting to multiple clients
   - Automatic ping-pong mechanism to prevent connection timeouts
   - Type-safe message handling with Go generics
-  - Pluggable Codec system for flexible message encoding (JSON, Protobuf)
+  - Pluggable Codec system for flexible message encoding (JSON here, Protobuf in http/protocodec)
   - Generic BaseConn[I, O] for typed input/output messages
   - Built-in JSON message support with JSONConn
   - Configurable timeouts and intervals for different deployment scenarios
@@ -376,17 +376,14 @@ WebSocket applications including authentication, load testing, and error scenari
 The package also provides utilities for HTTP request/response handling:
 
   - JsonToQueryString: Convert maps to URL query strings
-  - SendJsonResponse: Send JSON responses with proper error handling
-  - ErrorToHttpCode: Convert Go errors to appropriate HTTP status codes
-  - WSConnWriteMessage/WSConnWriteError: WebSocket message writing utilities
+  - WSConnWriteMessage: Write a JSON message to a WebSocket connection
   - NormalizeWsUrl: Convert HTTP URLs to WebSocket URLs
 
-Example HTTP utility usage:
-
-	func handleAPI(w http.ResponseWriter, r *http.Request) {
-		data, err := processRequest(r)
-		gohttp.SendJsonResponse(w, data, err)
-	}
+The helpers that understand gRPC status errors (SendJsonResponse,
+ErrorToHttpCode, WSConnWriteError, WSConnJSONReaderWriter) are in
+servicekit/http/grpcutil, and the protobuf codecs are in
+servicekit/http/protocodec. Keeping them out of this package means a
+JSON-only server doesn't link grpc or protobuf.
 
 This comprehensive framework enables building production-ready real-time applications
 with WebSocket communication, from simple echo servers to complex multi-user systems
