@@ -5,39 +5,50 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.1.12] - 2026-10-24
 
 Lets a grpcws server close the WebSocket when its stream ends, and drop
-clients that stop reading. Needed by massrelay to evict slow consumers
-(issue 47).
+clients that stop reading. massrelay needs both to evict slow consumers
+(issue 47). It also fixes a server connection that outlived a clean client
+close by up to the pong timeout, and a TS client bundle that imported nothing
+(issue 46). The new options all default to off.
 
 ### Added
 - `grpcws.ConnOptions`, embedded in all three stream handlers:
   `CloseOnStreamEnd` sends a 1000 close frame after `stream_end` and ends the
   connection, `CloseGracePeriod` (default 2s) bounds how long a stuck client
   can hold the socket after that, and `WriteTimeout` sets a per-write
-  deadline. All default to off.
+  deadline (PR 48).
 - `http.BaseConn.WriteTimeout` and `http.BaseConn.CloseAfterSend`, plus a
-  `Close` variant on `OutgoingMessage`.
+  `Close` variant on `OutgoingMessage` (PR 48).
+- TS client: `GRPCWSClient` and `TypedGRPCWSClient` report `streamEnded` in
+  `onClose`, so an app can tell a normal end from a dropped connection. The
+  mock gains `simulateStreamEnd()` and `simulateClose(code, reason)` (PR 48).
+
+### Changed
 - TS client: `onClose` receives `CloseInfo` (`code`, `reason`, `wasClean`).
-  `GRPCWSClient` and `TypedGRPCWSClient` add `streamEnded`. The mock gains
-  `simulateStreamEnd()` and `simulateClose(code, reason)`.
+  Existing `() => {}` handlers still type-check, but code that calls
+  `onClose()` directly needs an argument (PR 48).
+- A failed write on `BaseConn` now closes the socket. Before, the Writer
+  stopped but the read loop kept a connection open that could no longer send
+  (PR 48).
+- Any close or read error now ends `WSHandleConn`, even when `OnError`
+  returns nil. The reader has already stopped by then, so carrying on only
+  meant waiting for the pong timeout (PR 48).
 
 ### Fixed
 - `WSHandleConn` now ends when the client closes cleanly (code 1000) or the
   server closes the socket. Both surfaced as `net.ErrClosed`, which
   `conc.Reader` reports only on `ClosedChan`, so the loop waited for the pong
-  timeout. A peer close also ends the loop when `OnError` swallows errors.
-- A failed write on `BaseConn` now closes the socket. Before, the Writer
-  stopped but the read loop kept the connection open.
+  timeout (PR 48).
 - TS client: a browser bundle of `@panyam/servicekit-client` imported nothing.
   The `browser` field named the IIFE script build, which has no exports, and
   esbuild prefers that field over `module` for a browser, so every named
-  import was `undefined` (issue 46). The package now has an `exports` map
-  whose `import`, `browser` and `default` conditions name `dist/index.mjs`
-  and whose `require` names `dist/index.js`. The script build moved to the
-  `unpkg` and `jsdelivr` fields, and `./dist/*` and `./package.json` stay
-  reachable by path. CI now builds the client before its tests.
+  import was `undefined`. The package now has an `exports` map whose
+  `import`, `browser` and `default` conditions name `dist/index.mjs` and whose
+  `require` names `dist/index.js`. The script build moved to the `unpkg` and
+  `jsdelivr` fields, and `./dist/*` and `./package.json` stay reachable by
+  path. CI now builds the client before its tests (issue 46, PR 49).
 
 ## [v0.1.11] - 2026-10-23
 
