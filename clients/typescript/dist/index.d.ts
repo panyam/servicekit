@@ -64,9 +64,9 @@
  *
  * @packageDocumentation
  */
-export { MessageType, ControlMessage, ReadyState, ReadyStateType, ClientOptions, Codec, JSONCodec, BinaryCodec, MessageHandler, ErrorHandler, VoidHandler, } from './types';
+export { MessageType, ControlMessage, ReadyState, ReadyStateType, ClientOptions, Codec, JSONCodec, BinaryCodec, MessageHandler, ErrorHandler, VoidHandler, CloseInfo, CloseHandler, } from './types';
 export { BaseWSClient } from './base-client';
-export { GRPCWSClient, MockController } from './grpcws-client';
+export { GRPCWSClient, MockController, StreamCloseInfo } from './grpcws-client';
 export { TypedGRPCWSClient } from './typed-client';
 export { SSEClient, SSEClientOptions } from './sse-client';
 export { StreamableClient, StreamableClientOptions } from './streamable-client';

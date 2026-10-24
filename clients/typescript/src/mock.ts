@@ -39,8 +39,11 @@ export interface MockWSController {
   /** Simulate a WebSocket error event */
   simulateWsError(): void;
 
-  /** Simulate WebSocket close */
-  simulateClose(code?: number): void;
+  /**
+   * Simulate WebSocket close. `code` defaults to 1000. Any code other than
+   * 1006 counts as a clean close, as in the browser.
+   */
+  simulateClose(code?: number, reason?: string): void;
 
   /** Current WebSocket ready state */
   readonly readyState: number;
@@ -81,7 +84,7 @@ export function createMockWSPair(): {
 
     close() {
       this.readyState = ReadyState.CLOSED;
-      this.onclose?.({});
+      this.onclose?.({ code: 1000, reason: '', wasClean: true });
     }
 
     get sentRaw(): readonly (string | ArrayBuffer)[] {
@@ -114,10 +117,10 @@ export function createMockWSPair(): {
       ws!.onerror?.({});
     },
 
-    simulateClose(code?: number) {
+    simulateClose(code = 1000, reason = '') {
       assertConnected('simulateClose');
       ws!.readyState = ReadyState.CLOSED;
-      ws!.onclose?.({});
+      ws!.onclose?.({ code, reason, wasClean: code !== 1006 });
     },
 
     get readyState() {

@@ -23,7 +23,7 @@ const types_1 = require("./types");
  * ```typescript
  * const client = new BaseWSClient();
  * client.onMessage = (data) => console.log('Received:', data);
- * client.onClose = () => console.log('Disconnected');
+ * client.onClose = ({ code, reason }) => console.log('Disconnected', code, reason);
  * await client.connect('ws://localhost:8080/ws');
  * client.send({ hello: 'world' });
  * ```
@@ -35,7 +35,7 @@ class BaseWSClient {
         this.onMessage = () => { };
         /** Called when a ping is received (after auto-pong if enabled) */
         this.onPing = () => { };
-        /** Called when the connection closes */
+        /** Called when the connection closes, with the close code and reason */
         this.onClose = () => { };
         /** Called when a WebSocket error occurs */
         this.onError = () => { };
@@ -75,8 +75,12 @@ class BaseWSClient {
                 this.onError(errorMsg);
                 reject(new Error(errorMsg));
             };
-            this.ws.onclose = () => {
-                this.onClose();
+            this.ws.onclose = (event) => {
+                this.onClose({
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                });
             };
             this.ws.onmessage = (event) => {
                 this.handleRawMessage(event.data);

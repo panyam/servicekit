@@ -78,11 +78,13 @@ export {
   MessageHandler,
   ErrorHandler,
   VoidHandler,
+  CloseInfo,
+  CloseHandler,
 } from './types';
 
 // Clients
 export { BaseWSClient } from './base-client';
-export { GRPCWSClient, MockController } from './grpcws-client';
+export { GRPCWSClient, MockController, StreamCloseInfo } from './grpcws-client';
 export { TypedGRPCWSClient } from './typed-client';
 
 // SSE Clients

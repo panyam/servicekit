@@ -5,6 +5,32 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+Lets a grpcws server close the WebSocket when its stream ends, and drop
+clients that stop reading. Needed by massrelay to evict slow consumers
+(issue 47).
+
+### Added
+- `grpcws.ConnOptions`, embedded in all three stream handlers:
+  `CloseOnStreamEnd` sends a 1000 close frame after `stream_end` and ends the
+  connection, `CloseGracePeriod` (default 2s) bounds how long a stuck client
+  can hold the socket after that, and `WriteTimeout` sets a per-write
+  deadline. All default to off.
+- `http.BaseConn.WriteTimeout` and `http.BaseConn.CloseAfterSend`, plus a
+  `Close` variant on `OutgoingMessage`.
+- TS client: `onClose` receives `CloseInfo` (`code`, `reason`, `wasClean`).
+  `GRPCWSClient` and `TypedGRPCWSClient` add `streamEnded`. The mock gains
+  `simulateStreamEnd()` and `simulateClose(code, reason)`.
+
+### Fixed
+- `WSHandleConn` now ends when the client closes cleanly (code 1000) or the
+  server closes the socket. Both surfaced as `net.ErrClosed`, which
+  `conc.Reader` reports only on `ClosedChan`, so the loop waited for the pong
+  timeout. A peer close also ends the loop when `OnError` swallows errors.
+- A failed write on `BaseConn` now closes the socket. Before, the Writer
+  stopped but the read loop kept the connection open.
+
 ## [v0.1.11] - 2026-10-23
 
 Dependency patch release for five Dependabot alerts on the Go module (two

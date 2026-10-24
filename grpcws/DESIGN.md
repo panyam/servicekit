@@ -64,6 +64,8 @@ Lifecycle ordering: Validate (creates gRPC stream + cancellable ctx, fails fast 
 
 The forwardResponses loop distinguishes io.EOF (clean end → stream_end) from other errors, but on a non-EOF error it checks streamCtx.Done() first and exits silently if the context was already cancelled — this suppresses the spurious error that a Recv returns when the client cancels, so a deliberate cancel doesn't surface as an error frame.
 
+With ConnOptions.CloseOnStreamEnd, endStream replaces sendStreamEnd and hands stream_end to BaseConn.CloseAfterSend, which queues it ahead of a 1000 close frame. The hard-close timer is armed before anything is queued, because the Writer's input channel is unbuffered: if the client has stopped reading, queueing stream_end itself blocks, and only the timer's conn.Close frees it. WriteTimeout covers the other half, a client that stops reading while the stream is still producing (forwardResponses blocks in SendOutput before it ever sees io.EOF).
+
 All writes go through SendOutput / the embedded BaseConn Writer; per the package convention nothing writes to the *websocket.Conn directly, which is what makes the concurrent forwarder + handler safe. Ping is overridden at baseGRPCConn level so the heartbeat rides the same envelope protocol rather than a raw WS control frame.
 
 Half-close (end_send → CloseSend/CloseAndRecv) is the protocol's bridge over WebSocket's lack of native half-close, and is the key behavioral difference between client streaming (responds once, then stream_end) and bidi streaming (keeps receiving).

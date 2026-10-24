@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	gohttp "github.com/panyam/servicekit/http"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -66,7 +65,7 @@ func (c *ClientStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) 
 
 		c.metrics.IncrementSent()
 		c.SendOutput(dataMsg)
-		c.sendStreamEnd()
+		c.endStream()
 
 	case TypePong:
 		// Heartbeat response
@@ -107,6 +106,9 @@ type ClientStreamHandler[Req proto.Message, Resp proto.Message, Stream ClientStr
 
 	// UnmarshalOptions for protojson decoding (optional)
 	UnmarshalOptions protojson.UnmarshalOptions
+
+	// ConnOptions controls closing on stream end and write timeouts.
+	ConnOptions
 }
 
 // Validate implements WSHandler. Creates the gRPC stream.
@@ -134,14 +136,9 @@ func (h *ClientStreamHandler[Req, Resp, Stream]) Validate(
 	}
 
 	conn := &ClientStreamConn[Req, Resp, Stream]{
-		baseGRPCConn: baseGRPCConn{
-			BaseConn: gohttp.BaseConn[ControlMessage, ControlMessage]{
-				Codec:   codec,
-				NameStr: "ClientStreamConn",
-			},
-		},
-		stream: stream,
-		codec:  codec,
+		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ClientStreamConn"),
+		stream:       stream,
+		codec:        codec,
 	}
 
 	conn.initContext(ctx)

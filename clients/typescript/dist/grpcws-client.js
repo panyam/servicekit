@@ -54,13 +54,14 @@ const mock_1 = require("./mock");
  */
 class GRPCWSClient {
     constructor(options = {}) {
+        this.streamEnded = false;
         /** Called when a data message is received */
         this.onMessage = () => { };
         /** Called when the stream ends normally */
         this.onStreamEnd = () => { };
         /** Called when the server sends an error */
         this.onError = () => { };
-        /** Called when the connection closes */
+        /** Called when the connection closes, with the close code and whether stream_end came first */
         this.onClose = () => { };
         /** Called when a ping is received */
         this.onPing = () => { };
@@ -73,6 +74,7 @@ class GRPCWSClient {
      * @returns Promise that resolves when connected
      */
     connect(url) {
+        this.streamEnded = false;
         return this.base.connect(url);
     }
     /**
@@ -170,8 +172,11 @@ class GRPCWSClient {
             simulateError(message) {
                 wsCtrl.simulateRawMessage(JSON.stringify({ type: 'error', error: message ?? 'Mock error' }));
             },
-            simulateClose(code) {
-                wsCtrl.simulateClose(code);
+            simulateStreamEnd() {
+                wsCtrl.simulateRawMessage(JSON.stringify({ type: 'stream_end' }));
+            },
+            simulateClose(code, reason) {
+                wsCtrl.simulateClose(code, reason);
             },
             get readyState() {
                 return wsCtrl.readyState;
@@ -186,8 +191,8 @@ class GRPCWSClient {
         this.base.onMessage = (msg) => {
             this.handleEnvelopeMessage(msg);
         };
-        this.base.onClose = () => {
-            this.onClose();
+        this.base.onClose = (info) => {
+            this.onClose({ ...info, streamEnded: this.streamEnded });
         };
         this.base.onError = (error) => {
             this.onError(error);
@@ -211,6 +216,7 @@ class GRPCWSClient {
                 this.onMessage(controlMsg.data);
                 break;
             case 'stream_end':
+                this.streamEnded = true;
                 this.onStreamEnd();
                 break;
             case 'error':

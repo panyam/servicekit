@@ -14,7 +14,7 @@ import {
   JSONCodec,
   MessageHandler,
   ErrorHandler,
-  VoidHandler,
+  CloseHandler,
   ReadyState,
 } from './types';
 
@@ -31,7 +31,7 @@ import {
  * ```typescript
  * const client = new BaseWSClient();
  * client.onMessage = (data) => console.log('Received:', data);
- * client.onClose = () => console.log('Disconnected');
+ * client.onClose = ({ code, reason }) => console.log('Disconnected', code, reason);
  * await client.connect('ws://localhost:8080/ws');
  * client.send({ hello: 'world' });
  * ```
@@ -48,8 +48,8 @@ export class BaseWSClient<I = unknown, O = unknown> {
   /** Called when a ping is received (after auto-pong if enabled) */
   public onPing: (pingId: number) => void = () => {};
 
-  /** Called when the connection closes */
-  public onClose: VoidHandler = () => {};
+  /** Called when the connection closes, with the close code and reason */
+  public onClose: CloseHandler = () => {};
 
   /** Called when a WebSocket error occurs */
   public onError: ErrorHandler = () => {};
@@ -97,8 +97,12 @@ export class BaseWSClient<I = unknown, O = unknown> {
         reject(new Error(errorMsg));
       };
 
-      this.ws.onclose = () => {
-        this.onClose();
+      this.ws.onclose = (event: CloseEvent) => {
+        this.onClose({
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        });
       };
 
       this.ws.onmessage = (event) => {

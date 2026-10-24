@@ -57,14 +57,14 @@ entities:
   - name: WSHandleConn
     kind: func
     role: Runs the connection event loop — ping ticker, pong/timeout checker, reader dispatch, OnClose.
-    why: Wraps reads in a conc.Reader and maps gorilla unexpected-close errors to net.ErrClosed; resets read deadline on every received frame, not just pongs.
+    why: Wraps reads in a conc.Reader and maps gorilla unexpected-close errors to net.ErrClosed; resets read deadline on every received frame, not just pongs. Also selects on reader.ClosedChan, because conc.Reader reports net.ErrClosed only there (a clean client close and a server-side conn.Close both land there). Any close ends the loop even if OnError would swallow it.
   - name: BaseConn
     kind: struct
     role: Embeddable generic WS connection [I,O] wiring Codec + serialized Writer + ping/error/data dispatch.
-    why: All outgoing traffic (data, ping, error) goes through one OutgoingMessage union on one Writer goroutine — the package's core defense against concurrent socket writes.
+    why: All outgoing traffic (data, ping, error, close) goes through one OutgoingMessage union on one Writer goroutine — the package's core defense against concurrent socket writes. A write error closes the socket so the read loop exits too; WriteTimeout turns a stuck client into such an error. CloseAfterSend arms a hard-close timer before queueing its final frames, since the unbuffered Writer can block behind a stuck client.
   - name: OutgoingMessage
     kind: struct
-    role: Tagged union (Data | Ping | Error) carried on BaseConn's Writer.
+    role: Tagged union (Data | Ping | Error | Close) carried on BaseConn's Writer.
     why: Forces every write type onto a single channel so gorilla's no-concurrent-write rule is never violated.
   - name: PingData
     kind: struct
