@@ -27,9 +27,9 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 
 ## Modules
 
-- Root `github.com/panyam/servicekit`: `http/`, `middleware/`, `grpcws/`, `connectbridge/`, `auth/`. `http/` and `middleware/` must not import grpc, protobuf, Connect or gorm; `make check-deps` (in CI) enforces it. Proto codecs are in `http/protocodec`, gRPC-status helpers in `http/grpcutil`.
-- `hybrid/` is a separate module (grpc-gateway, Connect). Root `go test ./...` skips it; run `make -C hybrid test exercise`. It requires a **released** root version, never a `replace`. Tag it `hybrid/vX.Y.Z` with the same X.Y.Z as the root release that it was tested against.
-- `hybrid/demo/gen` is generated: `make -C hybrid gen` (buf remote plugins). The Connect plugin is pinned to v1 (`buf.build/connectrpc/go:v1.19.1`) because consumers and `connectbridge` are on Connect v1, and the unpinned plugin generates for v2.
+- Root `github.com/panyam/servicekit`: `http/`, `middleware/`, `grpcws/`. Its `go.mod` has no Connect or gorm (v0.2.0 deleted `auth/` and moved `connectbridge` into `hybrid/`). `http/` and `middleware/` must not import grpc, protobuf, Connect or gorm; `make check-deps` (in CI) enforces it. Proto codecs are in `http/protocodec`, gRPC-status helpers in `http/grpcutil`.
+- `hybrid/` is a separate module (grpc-gateway, Connect v2, `hybrid/connectbridge`). Root `go test ./...` skips it; run `make -C hybrid test exercise`. It requires a **released** root version, never a `replace`. Tag it `hybrid/vX.Y.Z` with the same X.Y.Z as the root release that it was tested against.
+- `hybrid/demo/gen` is generated: `make -C hybrid gen` (buf remote plugins). The Connect plugin is pinned to `buf.build/connectrpc/go:v2.0.2` to match `connectrpc.com/connect/v2` in `hybrid/go.mod`. Connect v2 drops `Request[T]`/`Response[T]` and per-handler options: handlers register on a `*connect.Server`, and codecs go to `connecthttp.Mount` (`WithCodecs` replaces the defaults). `connectbridge` depends only on `Send(*T) error`, so it serves v1 callers too.
 
 ## Gotchas
 
@@ -63,4 +63,4 @@ Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.clau
 github.com/panyam/servicekit
 ```
 
-Packages: `http/`, `grpcws/`, `middleware/`, `auth/`, `clients/typescript/`
+Packages: `http/` (+ `http/protocodec`, `http/grpcutil`), `grpcws/`, `middleware/`, `clients/typescript/`; separate module `hybrid/`

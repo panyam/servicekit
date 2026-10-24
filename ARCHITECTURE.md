@@ -54,19 +54,14 @@ servicekit/
 │   ├── client_stream.go    # Client streaming support
 │   └── bidi_stream.go      # Bidirectional streaming
 │
-├── connectbridge/           # Connect ↔ gRPC stream adapter
-│   └── bridge.go           # ConnectStreamBridge[T] wraps *connect.ServerStream[T]
-│                           # to satisfy grpc.ServerStreamingServer[T]
-│
 ├── middleware/               # HTTP middleware (Guard, rate limit, CORS, etc.)
 │
-├── hybrid/                  # Separate Go module: grpcws + grpc-gateway + Connect
+├── hybrid/                  # Separate Go module: grpcws + grpc-gateway + Connect v2
 │   ├── hybrid.go           # ProtoJSON (one JSON config for all three), Mux
+│   ├── connectbridge/      # ConnectStreamBridge[T]: a Connect server stream (any
+│   │                       # Sender[T], v1 or v2) as grpc.ServerStreamingServer[T]
 │   ├── demo/               # GameService served three ways, plus interop tests
 │   └── cmd/demo/           # `make -C hybrid exercise`
-│
-├── auth/                    # Authentication utilities
-│   └── flask/              # Flask session compatibility
 │
 └── cmd/                     # Examples
     ├── timews/             # Basic WebSocket example

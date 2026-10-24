@@ -440,7 +440,9 @@ watch.MarshalOptions, watch.UnmarshalOptions = pj.Marshal, pj.Unmarshal
 
 m := hybrid.NewMux()
 m.Gateway("/v1/", gw)                                     // under a prefix, so it can't swallow other routes
-m.Connect(genconnect.NewGameServiceHandler(connectImpl, pj.ConnectOption()))
+cs := connect.NewServer()                                 // connectrpc.com/connect/v2
+genconnect.RegisterGameServiceHandler(cs, connectImpl)
+m.Connect(cs, pj.ConnectOption())
 m.Handle("GET /ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
 http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 ```

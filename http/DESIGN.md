@@ -124,8 +124,8 @@ entities:
     why: Comment is captured (not discarded) so tests can assert on keepalives.
   - name: EventStore
     kind: interface
-    role: Persist/Replay/Trim SSE events for Last-Event-ID resumption.
-    why: Replay falls back to returning ALL events when the anchor ID is missing (conservative — assume the client missed everything rather than nothing).
+    role: Persist/Replay/Trim SSE events for Last-Event-ID resumption. Replay yields an iter.Seq2[StoredEvent, error]; ReplayAll collects it.
+    why: Replay is an iterator (issue 20) so a DB/Redis store can stream rows and a slow SSE consumer never holds a store lock; it falls back to yielding ALL events when the anchor ID is missing (conservative — assume the client missed everything rather than nothing).
   - name: MemoryEventStore
     kind: struct
     role: Bounded in-memory EventStore with FIFO eviction per stream.
