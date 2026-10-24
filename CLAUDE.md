@@ -25,6 +25,12 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **No real gRPC server for tests** — grpcws integration tests use channel-driven test doubles satisfying the stream interfaces. No protobuf codegen needed.
 - **One version for Go and TS** — the Go module and `@panyam/servicekit-client` share the version under `## Version` in CAPABILITIES.md. A release bumps it there and in `clients/typescript/package.json` (and its lock); `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` publishes the client at X.Y.Z through `publish-npm.yml`, which calls the shared `npm-publish.yml` (npm trusted publishing, no token). Other repos call that shared workflow too.
 
+## Modules
+
+- Root `github.com/panyam/servicekit`: `http/`, `middleware/`, `grpcws/`, `connectbridge/`, `auth/`. `http/` and `middleware/` must not import grpc, protobuf, Connect or gorm; `make check-deps` (in CI) enforces it. Proto codecs are in `http/protocodec`, gRPC-status helpers in `http/grpcutil`.
+- `hybrid/` is a separate module (grpc-gateway, Connect). Root `go test ./...` skips it; run `make -C hybrid test exercise`. It requires a **released** root version, never a `replace`. Tag it `hybrid/vX.Y.Z` with the same X.Y.Z as the root release that it was tested against.
+- `hybrid/demo/gen` is generated: `make -C hybrid gen` (buf remote plugins). The Connect plugin is pinned to v1 (`buf.build/connectrpc/go:v1.19.1`) because consumers and `connectbridge` are on Connect v1, and the unpinned plugin generates for v2.
+
 ## Gotchas
 
 - **ResponseWriter flush race** — never call `flusher.Flush()` from outside the `conc.Writer` goroutine after `OnStart`. The initial header flush must happen inside `OnStart`, before `conc.NewWriter()` is created. (See v0.0.10 fix.)

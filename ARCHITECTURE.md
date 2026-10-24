@@ -44,7 +44,9 @@ servicekit/
 │   ├── ssehub.go           # SSEHub[O] session manager
 │   ├── graceful.go         # ListenAndServeGraceful shutdown helper
 │   ├── streamable.go       # StreamableServe (POST-that-optionally-streams)
-│   └── utils.go            # HTTP/WS utilities
+│   ├── utils.go            # HTTP/WS utilities
+│   ├── protocodec/         # ProtoJSONCodec, BinaryProtoCodec (imports protobuf)
+│   └── grpcutil/           # gRPC-status → HTTP/WS error helpers (imports grpc)
 │
 ├── grpcws/                  # gRPC-over-WebSocket
 │   ├── conn.go             # Shared types, GRPCWSCodec
@@ -57,6 +59,11 @@ servicekit/
 │                           # to satisfy grpc.ServerStreamingServer[T]
 │
 ├── middleware/               # HTTP middleware (Guard, rate limit, CORS, etc.)
+│
+├── hybrid/                  # Separate Go module: grpcws + grpc-gateway + Connect
+│   ├── hybrid.go           # ProtoJSON (one JSON config for all three), Mux
+│   ├── demo/               # GameService served three ways, plus interop tests
+│   └── cmd/demo/           # `make -C hybrid exercise`
 │
 ├── auth/                    # Authentication utilities
 │   └── flask/              # Flask session compatibility

@@ -14,6 +14,15 @@ and are not back-filled here.
   `servicekit/http/grpcutil`. Behaviour is unchanged, and there are no aliases
   (see UPGRADING.md) (issue 17).
 
+### Added
+- `servicekit/hybrid`, a separate module, serves one proto service over
+  grpcws, grpc-gateway JSON and Connect from one handler. `hybrid.ProtoJSON`
+  gives every transport the same protojson options: by default the gateway
+  emits zero values and Connect and grpcws don't, so the same message came back
+  in two shapes. `hybrid.Mux` mounts the gateway under a prefix so it can't
+  swallow the other routes. `hybrid/demo` and `make -C hybrid exercise` show
+  it end to end (issue 50).
+
 ### Changed
 - `servicekit/http` and `middleware` no longer import grpc or protobuf. A
   minimal JSON WebSocket server goes from 14.8 MB to 9.5 MB.

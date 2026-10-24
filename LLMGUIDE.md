@@ -425,6 +425,28 @@ func main() {
 }
 ```
 
+### Template 10: One Service over grpcws, gateway JSON and Connect
+
+`github.com/panyam/servicekit/hybrid` is a separate module, so only servers that import it pull in grpc-gateway and Connect. Share one `hybrid.ProtoJSON` or the transports disagree on zero values (the gateway emits them, Connect and grpcws don't).
+
+```go
+pj := hybrid.ProtoJSON{Marshal: protojson.MarshalOptions{EmitUnpopulated: true}}
+
+gw := runtime.NewServeMux(pj.GatewayOption())
+gen.RegisterGameServiceHandlerServer(ctx, gw, impl)       // in-process, no gRPC dial
+
+watch := grpcws.NewServerStreamHandler[*gen.Req, *gen.Game, grpc.ServerStreamingClient[gen.Game]](create, parse)
+watch.MarshalOptions, watch.UnmarshalOptions = pj.Marshal, pj.Unmarshal
+
+m := hybrid.NewMux()
+m.Gateway("/v1/", gw)                                     // under a prefix, so it can't swallow other routes
+m.Connect(genconnect.NewGameServiceHandler(connectImpl, pj.ConnectOption()))
+m.Handle("GET /ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
+http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
+```
+
+The full example is `hybrid/demo`, and `make -C hybrid exercise` checks that all three return the same JSON.
+
 ## Key Rules (Do's and Don'ts)
 
 ### MUST Do
