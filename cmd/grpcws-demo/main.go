@@ -5,17 +5,21 @@
 //
 // Run: go run ./cmd/grpcws-demo
 // Test: Open http://localhost:8080/game123 in multiple browser windows
+// Metrics: http://localhost:8080/metrics
+// Exercise: make exercise (go run ./cmd/grpcws-demo -exercise)
 package main
 
 import (
 	"context"
 	_ "embed"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -23,6 +27,10 @@ import (
 	"github.com/panyam/servicekit/cmd/grpcws-demo/gen"
 	"github.com/panyam/servicekit/grpcws"
 	gohttp "github.com/panyam/servicekit/http"
+	"github.com/panyam/servicekit/prom"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -93,9 +101,12 @@ func (r *GameRoom) broadcastLoop() {
 	}
 }
 
+// AddPlayer, RemovePlayer and ProcessAction queue their event after
+// unlocking: broadcastLoop takes the lock to drain eventsChan, so sending
+// while holding it deadlocks once the channel fills (many players leaving
+// at once).
 func (r *GameRoom) AddPlayer(playerId string) *PlayerConn {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	conn := &PlayerConn{
 		playerId: playerId,
@@ -113,7 +124,7 @@ func (r *GameRoom) AddPlayer(playerId string) *PlayerConn {
 
 	// Broadcast join event
 	r.eventNum++
-	r.eventsChan <- &gen.GameEvent{
+	event := &gen.GameEvent{
 		EventId:   fmt.Sprintf("evt-%d", r.eventNum),
 		EventType: "player_joined",
 		Timestamp: time.Now().UnixMilli(),
@@ -125,14 +136,22 @@ func (r *GameRoom) AddPlayer(playerId string) *PlayerConn {
 			},
 		},
 	}
-
 	log.Printf("[%s] Player %s joined (total: %d)", r.gameId, playerId, len(r.players))
+	r.mu.Unlock()
+
+	r.eventsChan <- event
 	return conn
 }
 
 func (r *GameRoom) RemovePlayer(playerId string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	var event *gen.GameEvent
+	defer func() {
+		r.mu.Unlock()
+		if event != nil {
+			r.eventsChan <- event
+		}
+	}()
 
 	if conn, exists := r.players[playerId]; exists {
 		close(conn.events)
@@ -142,7 +161,7 @@ func (r *GameRoom) RemovePlayer(playerId string) {
 
 		// Broadcast leave event
 		r.eventNum++
-		r.eventsChan <- &gen.GameEvent{
+		event = &gen.GameEvent{
 			EventId:   fmt.Sprintf("evt-%d", r.eventNum),
 			EventType: "player_left",
 			Timestamp: time.Now().UnixMilli(),
@@ -161,7 +180,11 @@ func (r *GameRoom) RemovePlayer(playerId string) {
 
 func (r *GameRoom) ProcessAction(action *gen.PlayerAction) *gen.GameState {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	var event *gen.GameEvent
+	defer func() {
+		r.mu.Unlock()
+		r.eventsChan <- event
+	}()
 
 	// Update player state
 	player, exists := r.gameState[action.PlayerId]
@@ -191,7 +214,7 @@ func (r *GameRoom) ProcessAction(action *gen.PlayerAction) *gen.GameState {
 
 	// Broadcast action event to all players
 	r.eventNum++
-	r.eventsChan <- &gen.GameEvent{
+	event = &gen.GameEvent{
 		EventId:   fmt.Sprintf("evt-%d", r.eventNum),
 		EventType: "player_action",
 		Timestamp: time.Now().UnixMilli(),
@@ -237,14 +260,85 @@ func (r *GameRoom) ProcessAction(action *gen.PlayerAction) *gen.GameState {
 	return state
 }
 
-func main() {
+// demoConfig is what main's flags and the exercise set.
+type demoConfig struct {
+	// ConnOptions applies to all three stream handlers.
+	grpcws.ConnOptions
+	// Metrics, if set, observes every connection and request; /metrics
+	// serves Registry.
+	Metrics  *prom.ConnMetrics
+	HTTP     *prom.HTTPMetrics
+	Registry *prometheus.Registry
+}
+
+func newDemoConfig(opts grpcws.ConnOptions) demoConfig {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector())
+	cfg := demoConfig{
+		ConnOptions: opts,
+		Metrics:     prom.NewConnMetrics(reg),
+		HTTP:        prom.NewHTTPMetrics(reg),
+		Registry:    reg,
+	}
+	cfg.ConnOptions.Observer = cfg.Metrics
+	return cfg
+}
+
+func newRouter(cfg demoConfig) *mux.Router {
 	router := mux.NewRouter()
+	router.Use(cfg.HTTP.Middleware)
+	router.Handle("/metrics", promhttp.HandlerFor(cfg.Registry, promhttp.HandlerOpts{}))
 
 	// Serve the client library
 	router.HandleFunc("/servicekit-client.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
 		http.ServeFile(w, r, "clients/typescript/dist/servicekit-client.browser.js")
 	})
+
+	// WebSocket endpoints with gameId
+	wsRouter := router.PathPrefix("/ws").Subrouter()
+
+	// Server streaming: Subscribe to game events (broadcasts to all in same game)
+	subscribe := grpcws.NewServerStreamHandler(
+		func(ctx context.Context, req *gen.SubscribeRequest) (*SharedServerStream, error) {
+			room := hub.GetOrCreateRoom(req.GameId)
+			return NewSharedServerStream(ctx, room, req), nil
+		},
+		func(r *http.Request) (*gen.SubscribeRequest, error) {
+			vars := mux.Vars(r)
+			playerId := r.URL.Query().Get("player_id")
+			if playerId == "" {
+				playerId = fmt.Sprintf("player-%d", rand.Intn(10000))
+			}
+			return &gen.SubscribeRequest{
+				GameId:   vars["gameId"],
+				PlayerId: playerId,
+			}, nil
+		},
+	)
+	subscribe.ConnOptions = cfg.ConnOptions
+	wsRouter.HandleFunc("/v1/{gameId}/subscribe", gohttp.WSServe(subscribe, nil))
+
+	// Client streaming: Send commands
+	commands := grpcws.NewClientStreamHandler(
+		func(ctx context.Context) (*MockClientStream, error) {
+			return NewMockClientStream(ctx), nil
+		},
+		func() *gen.GameCommand { return &gen.GameCommand{} },
+	)
+	commands.ConnOptions = cfg.ConnOptions
+	wsRouter.HandleFunc("/v1/{gameId}/commands", gohttp.WSServe(commands, nil))
+
+	// Bidirectional streaming: Game sync (shared state)
+	syncGame := grpcws.NewBidiStreamHandler(
+		func(ctx context.Context) (*SharedBidiStream, error) {
+			// We'll get gameId from the first action's playerId context
+			return NewSharedBidiStream(ctx), nil
+		},
+		func() *gen.PlayerAction { return &gen.PlayerAction{} },
+	)
+	syncGame.ConnOptions = cfg.ConnOptions
+	wsRouter.HandleFunc("/v1/{gameId}/sync", gohttp.WSServe(syncGame, nil))
 
 	// Serve the test UI at /{gameId}
 	router.HandleFunc("/{gameId}", func(w http.ResponseWriter, r *http.Request) {
@@ -256,56 +350,30 @@ func main() {
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/game-"+fmt.Sprintf("%d", rand.Intn(1000)), http.StatusTemporaryRedirect)
 	})
+	return router
+}
 
-	// WebSocket endpoints with gameId
-	wsRouter := router.PathPrefix("/ws").Subrouter()
+func main() {
+	addr := flag.String("addr", ":8080", "listen address")
+	writeTimeout := flag.Duration("write-timeout", 10*time.Second, "drop a client whose write takes longer than this (0: never)")
+	closeOnEnd := flag.Bool("close-on-stream-end", true, "close the WebSocket when its stream ends")
+	exercise := flag.Bool("exercise", false, "run the observable_relay exercise (issue 51) and exit")
+	ex := exerciseFlags()
+	flag.Parse()
 
-	// Server streaming: Subscribe to game events (broadcasts to all in same game)
-	wsRouter.HandleFunc("/v1/{gameId}/subscribe", gohttp.WSServe(
-		grpcws.NewServerStreamHandler(
-			func(ctx context.Context, req *gen.SubscribeRequest) (*SharedServerStream, error) {
-				room := hub.GetOrCreateRoom(req.GameId)
-				return NewSharedServerStream(ctx, room, req), nil
-			},
-			func(r *http.Request) (*gen.SubscribeRequest, error) {
-				vars := mux.Vars(r)
-				playerId := r.URL.Query().Get("player_id")
-				if playerId == "" {
-					playerId = fmt.Sprintf("player-%d", rand.Intn(10000))
-				}
-				return &gen.SubscribeRequest{
-					GameId:   vars["gameId"],
-					PlayerId: playerId,
-				}, nil
-			},
-		),
-		nil,
-	))
+	if *exercise {
+		log.SetOutput(io.Discard)
+		if err := runExercise(*ex); err != nil {
+			fmt.Fprintln(os.Stderr, "exercise:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
-	// Client streaming: Send commands
-	wsRouter.HandleFunc("/v1/{gameId}/commands", gohttp.WSServe(
-		grpcws.NewClientStreamHandler(
-			func(ctx context.Context) (*MockClientStream, error) {
-				return NewMockClientStream(ctx), nil
-			},
-			func() *gen.GameCommand { return &gen.GameCommand{} },
-		),
-		nil,
-	))
+	cfg := newDemoConfig(grpcws.ConnOptions{CloseOnStreamEnd: *closeOnEnd, WriteTimeout: *writeTimeout})
+	router := newRouter(cfg)
 
-	// Bidirectional streaming: Game sync (shared state)
-	wsRouter.HandleFunc("/v1/{gameId}/sync", gohttp.WSServe(
-		grpcws.NewBidiStreamHandler(
-			func(ctx context.Context) (*SharedBidiStream, error) {
-				// We'll get gameId from the first action's playerId context
-				return NewSharedBidiStream(ctx), nil
-			},
-			func() *gen.PlayerAction { return &gen.PlayerAction{} },
-		),
-		nil,
-	))
-
-	log.Println("Starting grpcws-demo server on :8080")
+	log.Printf("Starting grpcws-demo server on %s", *addr)
 	log.Println("")
 	log.Println("Open http://localhost:8080/my-game in MULTIPLE browser windows")
 	log.Println("All windows with the same game ID will see each other's actions!")
@@ -314,8 +382,9 @@ func main() {
 	log.Println("  ws://localhost:8080/ws/v1/{gameId}/subscribe  - Server streaming (shared events)")
 	log.Println("  ws://localhost:8080/ws/v1/{gameId}/commands   - Client streaming")
 	log.Println("  ws://localhost:8080/ws/v1/{gameId}/sync       - Bidi streaming (shared state)")
+	log.Println("  http://localhost:8080/metrics                 - Prometheus metrics")
 
-	if err := http.ListenAndServe(":8080", router); err != nil {
+	if err := http.ListenAndServe(*addr, router); err != nil {
 		log.Fatal(err)
 	}
 }

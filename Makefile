@@ -1,4 +1,4 @@
-.PHONY: test test-race vet check-deps cover cover-html cover-func testall install-hooks
+.PHONY: test test-race vet check-deps exercise cover cover-html cover-func testall install-hooks
 
 REPORT_DIR := test-reports
 
@@ -15,6 +15,11 @@ vet:
 # JSON-only packages must not pull in grpc/protobuf/connect/gorm (issue 17).
 check-deps:
 	scripts/check-deps.sh
+
+# The observable_relay mission's exercise (issue 51): 300 grpcws subscribers,
+# 10 that never read, checked against /metrics.
+exercise:
+	go run ./cmd/grpcws-demo -exercise
 
 cover: ## Run tests with coverage summary
 	go test -cover ./... -count=1 -timeout 60s
