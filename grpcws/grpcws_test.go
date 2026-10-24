@@ -41,7 +41,7 @@ func TestGRPCWSCodec_Decode(t *testing.T) {
 			msgType: gohttp.TextMessage,
 			want: ControlMessage{
 				Type:   TypePing,
-				PingId: 42,
+				PingID: 42,
 			},
 		},
 		{
@@ -50,7 +50,7 @@ func TestGRPCWSCodec_Decode(t *testing.T) {
 			msgType: gohttp.TextMessage,
 			want: ControlMessage{
 				Type:   TypePong,
-				PingId: 42,
+				PingID: 42,
 			},
 		},
 		{
@@ -99,8 +99,8 @@ func TestGRPCWSCodec_Decode(t *testing.T) {
 			if got.Type != tt.want.Type {
 				t.Errorf("Decode() Type = %v, want %v", got.Type, tt.want.Type)
 			}
-			if got.PingId != tt.want.PingId {
-				t.Errorf("Decode() PingId = %v, want %v", got.PingId, tt.want.PingId)
+			if got.PingID != tt.want.PingID {
+				t.Errorf("Decode() PingID = %v, want %v", got.PingID, tt.want.PingID)
 			}
 			if got.Error != tt.want.Error {
 				t.Errorf("Decode() Error = %v, want %v", got.Error, tt.want.Error)
@@ -141,7 +141,7 @@ func TestGRPCWSCodec_Encode(t *testing.T) {
 			name: "ping message",
 			msg: ControlMessage{
 				Type:   TypePing,
-				PingId: 123,
+				PingID: 123,
 			},
 		},
 	}
@@ -280,7 +280,7 @@ func TestControlMessage_Marshaling(t *testing.T) {
 			name: "ping with id",
 			msg: ControlMessage{
 				Type:   TypePing,
-				PingId: 12345,
+				PingID: 12345,
 			},
 		},
 		{
@@ -312,8 +312,8 @@ func TestControlMessage_Marshaling(t *testing.T) {
 			if decoded.Error != tt.msg.Error {
 				t.Errorf("Error = %v, want %v", decoded.Error, tt.msg.Error)
 			}
-			if decoded.PingId != tt.msg.PingId {
-				t.Errorf("PingId = %v, want %v", decoded.PingId, tt.msg.PingId)
+			if decoded.PingID != tt.msg.PingID {
+				t.Errorf("PingID = %v, want %v", decoded.PingID, tt.msg.PingID)
 			}
 		})
 	}

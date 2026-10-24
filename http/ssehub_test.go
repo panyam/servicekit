@@ -47,7 +47,7 @@ func createTestSSEConn[O any](t *testing.T, codec Codec[any, O], name string) *B
 	conn := &BaseSSEConn[O]{
 		Codec:     codec,
 		NameStr:   name,
-		ConnIdStr: name, // use name as ID for easy test assertions
+		ConnIDStr: name, // use name as ID for easy test assertions
 	}
 	w := newMockResponseWriter()
 	r := httptest.NewRequest("GET", "/events", nil)

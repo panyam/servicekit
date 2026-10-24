@@ -40,7 +40,7 @@ func (e *EchoConn) HandleMessage(msg any) error {
 		"originalMsg":  msg,
 		"messageCount": atomic.LoadInt64(&e.messageCount),
 		"timestamp":    time.Now().Unix(),
-		"connId":       e.ConnId(),
+		"connId":       e.ConnID(),
 	}
 
 	e.SendOutput(any(response))
@@ -76,7 +76,7 @@ type Room struct {
 func (r *Room) AddClient(client *ChatConn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.clients[client.ConnId()] = client
+	r.clients[client.ConnID()] = client
 }
 
 func (r *Room) RemoveClient(clientId string) {
@@ -111,7 +111,7 @@ func (c *ChatConn) OnStart(conn *websocket.Conn) error {
 
 	// Register with server
 	c.server.mu.Lock()
-	c.server.clients[c.ConnId()] = c
+	c.server.clients[c.ConnID()] = c
 	atomic.AddInt64(&c.server.connCount, 1)
 	c.server.mu.Unlock()
 
@@ -121,7 +121,7 @@ func (c *ChatConn) OnStart(conn *websocket.Conn) error {
 	// Send welcome message
 	welcome := map[string]any{
 		"type":     "welcome",
-		"connId":   c.ConnId(),
+		"connId":   c.ConnID(),
 		"username": c.username,
 		"room":     c.roomName,
 		"server":   "ServiceKit Chat Server",
@@ -139,7 +139,7 @@ func (c *ChatConn) OnClose() {
 
 	// Unregister from server
 	c.server.mu.Lock()
-	delete(c.server.clients, c.ConnId())
+	delete(c.server.clients, c.ConnID())
 	atomic.AddInt64(&c.server.connCount, -1)
 	c.server.mu.Unlock()
 
@@ -168,7 +168,7 @@ func (c *ChatConn) HandleMessage(msg any) error {
 
 	case "pong":
 		// Handle client pong response
-		log.Printf("Received pong from client %s", c.ConnId())
+		log.Printf("Received pong from client %s", c.ConnID())
 
 	case "chat":
 		// Broadcast chat message to room
@@ -182,7 +182,7 @@ func (c *ChatConn) HandleMessage(msg any) error {
 			}
 
 			if room, exists := c.server.rooms[c.roomName]; exists {
-				room.Broadcast(chatMsg, c.ConnId())
+				room.Broadcast(chatMsg, c.ConnID())
 			}
 		}
 
@@ -241,9 +241,9 @@ func (c *ChatConn) joinRoom(roomName string) {
 		"type":     "user_joined",
 		"username": c.username,
 		"room":     roomName,
-		"connId":   c.ConnId(),
+		"connId":   c.ConnID(),
 	}
-	room.Broadcast(joinMsg, c.ConnId())
+	room.Broadcast(joinMsg, c.ConnID())
 }
 
 func (c *ChatConn) leaveRoom() {
@@ -261,11 +261,11 @@ func (c *ChatConn) leaveRoom() {
 			"type":     "user_left",
 			"username": c.username,
 			"room":     c.roomName,
-			"connId":   c.ConnId(),
+			"connId":   c.ConnID(),
 		}
-		room.Broadcast(leaveMsg, c.ConnId())
+		room.Broadcast(leaveMsg, c.ConnID())
 
-		room.RemoveClient(c.ConnId())
+		room.RemoveClient(c.ConnID())
 	}
 
 	c.roomName = ""

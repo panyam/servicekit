@@ -23,16 +23,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// SendJsonResponse writes a JSON response to the http.ResponseWriter.
+// SendJSONResponse writes a JSON response to the http.ResponseWriter.
 // If err is nil, resp is marshaled to JSON and written with status 200 OK.
 // If err is non-nil, an appropriate HTTP error code is set based on the gRPC
 // status code (if present), and an error object is returned in the response body.
 //
 // The function handles gRPC status errors by extracting the code and message,
-// and maps them to appropriate HTTP status codes via ErrorToHttpCode.
-func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
+// and maps them to appropriate HTTP status codes via ErrorToHTTPCode.
+func SendJSONResponse(writer http.ResponseWriter, resp any, err error) {
 	output := resp
-	httpCode := ErrorToHttpCode(err)
+	httpCode := ErrorToHTTPCode(err)
 	if err != nil {
 		if er, ok := status.FromError(err); ok {
 			code := er.Code()
@@ -56,7 +56,7 @@ func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
 	writer.Write(jsonResp)
 }
 
-// ErrorToHttpCode converts a Go error to an appropriate HTTP status code.
+// ErrorToHTTPCode converts a Go error to an appropriate HTTP status code.
 // If err is nil, returns http.StatusOK (200).
 // If err contains a gRPC status, maps it to the corresponding HTTP code:
 //   - codes.PermissionDenied → 403 Forbidden
@@ -64,7 +64,7 @@ func SendJsonResponse(writer http.ResponseWriter, resp any, err error) {
 //   - codes.AlreadyExists → 409 Conflict
 //   - codes.InvalidArgument → 400 Bad Request
 //   - Other errors → 500 Internal Server Error
-func ErrorToHttpCode(err error) int {
+func ErrorToHTTPCode(err error) int {
 	httpCode := http.StatusOK
 	if err != nil {
 		httpCode = http.StatusInternalServerError
@@ -131,7 +131,7 @@ func WSConnJSONReaderWriter(conn *websocket.Conn) (reader *conc.Reader[gut.StrMa
 		if msg.Error == io.EOF {
 			log.Println("Streamer closed...", msg.Error)
 			// do nothing
-			// SendJsonResponse(rw, nil, msg.Error)
+			// SendJSONResponse(rw, nil, msg.Error)
 			return msg.Error
 		} else if msg.Error != nil {
 			return WSConnWriteError(conn, msg.Error)

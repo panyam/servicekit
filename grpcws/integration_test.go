@@ -367,7 +367,7 @@ func TestServerStream_Ping(t *testing.T) {
 
 	// Should receive at least one ping within 200ms
 	msg := recvControlOfType(t, conn, TypePing, 500*time.Millisecond)
-	if msg.PingId == 0 {
+	if msg.PingID == 0 {
 		t.Error("Expected non-zero pingId in ping message")
 	}
 

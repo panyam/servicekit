@@ -39,8 +39,8 @@ type CloseData struct {
 
 // PingData contains ping message metadata.
 type PingData struct {
-	PingId int64
-	ConnId string
+	PingID int64
+	ConnID string
 	Name   string
 }
 
@@ -74,14 +74,14 @@ type BaseConn[I any, O any] struct {
 	// NameStr is an optional human-readable name for this connection.
 	NameStr string
 
-	// ConnIdStr is a unique identifier for this connection.
+	// ConnIDStr is a unique identifier for this connection.
 	// Auto-generated if not set.
-	ConnIdStr string
+	ConnIDStr string
 
-	// PingId tracks the current ping sequence number. SendPing advances it on
+	// PingID tracks the current ping sequence number. SendPing advances it on
 	// the connection loop while DebugInfo and embedders may read it from other
 	// goroutines, so it is atomic and BaseConn must not be copied after use.
-	PingId atomic.Int64
+	PingID atomic.Int64
 
 	// WriteTimeout bounds each write to the client. A write that does not
 	// finish in time (a client that has stopped reading and filled its TCP
@@ -106,20 +106,20 @@ func (b *BaseConn[I, O]) Name() string {
 	return b.NameStr
 }
 
-// ConnId returns the connection ID, generating one if not set.
-func (b *BaseConn[I, O]) ConnId() string {
-	if b.ConnIdStr == "" {
-		b.ConnIdStr = gut.RandString(10, "")
+// ConnID returns the connection ID, generating one if not set.
+func (b *BaseConn[I, O]) ConnID() string {
+	if b.ConnIDStr == "" {
+		b.ConnIDStr = gut.RandString(10, "")
 	}
-	return b.ConnIdStr
+	return b.ConnIDStr
 }
 
 // DebugInfo returns debug information about the connection.
 func (b *BaseConn[I, O]) DebugInfo() any {
 	info := map[string]any{
 		"name":   b.NameStr,
-		"connId": b.ConnIdStr,
-		"pingId": b.PingId.Load(),
+		"connId": b.ConnIDStr,
+		"pingId": b.PingID.Load(),
 	}
 	if b.Writer != nil {
 		info["writer"] = b.Writer.DebugInfo()
@@ -141,7 +141,7 @@ func (b *BaseConn[I, O]) ReadMessage(conn *websocket.Conn) (I, error) {
 // OnStart initializes the connection after WebSocket upgrade.
 // Creates the Writer with codec-aware encoding.
 func (b *BaseConn[I, O]) OnStart(conn *websocket.Conn) error {
-	log.Printf("Starting %s connection: %s", b.Name(), b.ConnId())
+	log.Printf("Starting %s connection: %s", b.Name(), b.ConnID())
 
 	b.wsConn = conn
 	b.Writer = conc.NewWriter(func(msg OutgoingMessage[O]) error {
@@ -211,8 +211,8 @@ func (b *BaseConn[I, O]) writeError(conn *websocket.Conn, err error) error {
 func (b *BaseConn[I, O]) writePing(conn *websocket.Conn, ping *PingData) error {
 	pingMsg := map[string]any{
 		"type":   "ping",
-		"pingId": ping.PingId,
-		"connId": ping.ConnId,
+		"pingId": ping.PingID,
+		"connId": ping.ConnID,
 		"name":   ping.Name,
 	}
 	data, marshalErr := json.Marshal(pingMsg)
@@ -226,12 +226,12 @@ func (b *BaseConn[I, O]) writePing(conn *websocket.Conn, ping *PingData) error {
 // SendPing sends a ping message through the Writer.
 // This ensures thread-safe writes by going through the serialized Writer.
 func (b *BaseConn[I, O]) SendPing() error {
-	pingId := b.PingId.Add(1)
+	pingId := b.PingID.Add(1)
 	if b.Writer != nil {
 		b.Writer.Send(OutgoingMessage[O]{
 			Ping: &PingData{
-				PingId: pingId,
-				ConnId: b.ConnId(),
+				PingID: pingId,
+				ConnID: b.ConnID(),
 				Name:   b.Name(),
 			},
 		})
@@ -260,7 +260,7 @@ func (b *BaseConn[I, O]) OnClose() {
 	if b.Writer != nil {
 		b.Writer.Stop()
 	}
-	log.Printf("Closed %s connection: %s", b.Name(), b.ConnId())
+	log.Printf("Closed %s connection: %s", b.Name(), b.ConnID())
 }
 
 // OnTimeout handles read timeout.

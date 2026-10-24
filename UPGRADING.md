@@ -8,8 +8,8 @@
 |---|---|
 | `gohttp.ProtoJSONCodec` | `protocodec.ProtoJSONCodec` (`servicekit/http/protocodec`) |
 | `gohttp.BinaryProtoCodec` | `protocodec.BinaryProtoCodec` |
-| `gohttp.SendJsonResponse` | `grpcutil.SendJsonResponse` (`servicekit/http/grpcutil`) |
-| `gohttp.ErrorToHttpCode` | `grpcutil.ErrorToHttpCode` |
+| `gohttp.SendJsonResponse` | `grpcutil.SendJSONResponse` (`servicekit/http/grpcutil`) |
+| `gohttp.ErrorToHttpCode` | `grpcutil.ErrorToHTTPCode` |
 | `gohttp.WSConnWriteError` | `grpcutil.WSConnWriteError` |
 | `gohttp.WSConnJSONReaderWriter` | `grpcutil.WSConnJSONReaderWriter` |
 

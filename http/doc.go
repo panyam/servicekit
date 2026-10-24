@@ -72,7 +72,7 @@ Provides lifecycle and message handling methods:
 	type BiDirStreamConn[I any] interface {
 		SendPing() error
 		Name() string
-		ConnId() string
+		ConnID() string
 		HandleMessage(msg I) error
 		OnError(err error) error
 		OnClose()
@@ -103,7 +103,7 @@ Provides lifecycle and message handling methods:
 
 		// Register with server
 		c.server.mu.Lock()
-		c.server.clients[c.ConnId()] = c
+		c.server.clients[c.ConnID()] = c
 		c.server.mu.Unlock()
 
 		return nil
@@ -293,7 +293,7 @@ The framework provides robust error handling:
 	}
 
 	func (r *ResilientConn) OnTimeout() bool {
-		log.Printf("Connection timeout for %s", r.ConnId())
+		log.Printf("Connection timeout for %s", r.ConnID())
 		return true // Close the connection
 	}
 
@@ -375,12 +375,12 @@ WebSocket applications including authentication, load testing, and error scenari
 
 The package also provides utilities for HTTP request/response handling:
 
-  - JsonToQueryString: Convert maps to URL query strings
+  - JSONToQueryString: Convert maps to URL query strings
   - WSConnWriteMessage: Write a JSON message to a WebSocket connection
-  - NormalizeWsUrl: Convert HTTP URLs to WebSocket URLs
+  - NormalizeWSURL: Convert HTTP URLs to WebSocket URLs
 
-The helpers that understand gRPC status errors (SendJsonResponse,
-ErrorToHttpCode, WSConnWriteError, WSConnJSONReaderWriter) are in
+The helpers that understand gRPC status errors (SendJSONResponse,
+ErrorToHTTPCode, WSConnWriteError, WSConnJSONReaderWriter) are in
 servicekit/http/grpcutil, and the protobuf codecs are in
 servicekit/http/protocodec. Keeping them out of this package means a
 JSON-only server doesn't link grpc or protobuf.

@@ -22,7 +22,7 @@ import (
 //	hub.Register(conn)
 //
 //	// In your SSEConn.OnClose:
-//	hub.Unregister(conn.ConnId())
+//	hub.Unregister(conn.ConnID())
 //
 //	// From application code:
 //	hub.Broadcast(MyEvent{Type: "update", Data: ...})
@@ -42,17 +42,17 @@ func NewSSEHub[O any]() *SSEHub[O] {
 	}
 }
 
-// Register adds an SSE connection to the hub, keyed by its ConnId.
+// Register adds an SSE connection to the hub, keyed by its ConnID.
 // If a connection with the same ID already exists, it is replaced (the old
 // connection is NOT closed — the caller is responsible for lifecycle management).
 func (h *SSEHub[O]) Register(conn *BaseSSEConn[O]) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.conns[conn.ConnId()] = conn
-	log.Printf("SSEHub: registered connection %s (total: %d)", conn.ConnId(), len(h.conns))
+	h.conns[conn.ConnID()] = conn
+	log.Printf("SSEHub: registered connection %s (total: %d)", conn.ConnID(), len(h.conns))
 }
 
-// Unregister removes an SSE connection from the hub by its ConnId.
+// Unregister removes an SSE connection from the hub by its ConnID.
 // The connection's OnClose is NOT called — the caller manages the connection
 // lifecycle (typically SSEServe handles OnClose via defer).
 //

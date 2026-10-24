@@ -93,15 +93,15 @@ func (c *BidiStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) er
 			c.sendError(err.Error())
 			return err
 		}
-		log.Printf("Client %s half-closed the stream", c.ConnId())
+		log.Printf("Client %s half-closed the stream", c.ConnID())
 
 	case TypePong:
 		// Heartbeat response
-		log.Printf("Received pong from client %s", c.ConnId())
+		log.Printf("Received pong from client %s", c.ConnID())
 
 	case TypeCancel:
 		// Client requested cancellation
-		log.Printf("Client %s requested stream cancellation", c.ConnId())
+		log.Printf("Client %s requested stream cancellation", c.ConnID())
 		c.cancel()
 
 	default:
@@ -115,7 +115,7 @@ func (c *BidiStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) er
 func (c *BidiStreamConn[Req, Resp, Stream]) OnClose() {
 	c.baseGRPCConn.OnClose()
 	log.Printf("BidiStreamConn %s closed: sent %d, received %d messages",
-		c.ConnId(), c.metrics.Sent(), c.metrics.Received())
+		c.ConnID(), c.metrics.Sent(), c.metrics.Received())
 }
 
 // ============================================================================

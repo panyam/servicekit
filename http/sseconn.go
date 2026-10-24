@@ -100,9 +100,9 @@ type SSEConn[O any] interface {
 	// Used for logging and debugging.
 	Name() string
 
-	// ConnId returns a unique identifier for this connection instance.
+	// ConnID returns a unique identifier for this connection instance.
 	// Used for tracking in SSEHub and logging.
-	ConnId() string
+	ConnID() string
 
 	// OnStart is called when the SSE connection is established.
 	// Receives the ResponseWriter (which must implement http.Flusher) and
@@ -163,9 +163,9 @@ type BaseSSEConn[O any] struct {
 	// NameStr is an optional human-readable name for this connection.
 	NameStr string
 
-	// ConnIdStr is a unique identifier for this connection.
+	// ConnIDStr is a unique identifier for this connection.
 	// Auto-generated if not set.
-	ConnIdStr string
+	ConnIDStr string
 
 	// ready is closed when OnStart completes and the Writer is initialized.
 	// Initialized eagerly via initReady(). Use Ready() to wait.
@@ -186,12 +186,12 @@ func (b *BaseSSEConn[O]) Name() string {
 	return b.NameStr
 }
 
-// ConnId returns the connection ID, generating one if not set.
-func (b *BaseSSEConn[O]) ConnId() string {
-	if b.ConnIdStr == "" {
-		b.ConnIdStr = gut.RandString(10, "")
+// ConnID returns the connection ID, generating one if not set.
+func (b *BaseSSEConn[O]) ConnID() string {
+	if b.ConnIDStr == "" {
+		b.ConnIDStr = gut.RandString(10, "")
 	}
-	return b.ConnIdStr
+	return b.ConnIDStr
 }
 
 // OnStart initializes the SSE connection. It asserts that the ResponseWriter
@@ -209,7 +209,7 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("streaming not supported: ResponseWriter does not implement http.Flusher")
 	}
 
-	log.Printf("Starting %s SSE connection: %s", b.Name(), b.ConnId())
+	log.Printf("Starting %s SSE connection: %s", b.Name(), b.ConnID())
 
 	// Flush headers immediately so the client receives them before any
 	// data events. This must happen before creating the Writer goroutine
@@ -302,7 +302,7 @@ func (b *BaseSSEConn[O]) OnClose() {
 			close(b.done)
 		}
 	})
-	log.Printf("Closed %s SSE connection: %s", b.Name(), b.ConnId())
+	log.Printf("Closed %s SSE connection: %s", b.Name(), b.ConnID())
 }
 
 // SendOutput sends a data message to the client. The message is serialized

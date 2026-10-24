@@ -10,10 +10,10 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/panyam/servicekit/connectbridge"
 	"github.com/panyam/servicekit/grpcws"
 	gohttp "github.com/panyam/servicekit/http"
 	"github.com/panyam/servicekit/hybrid"
+	"github.com/panyam/servicekit/hybrid/connectbridge"
 	"github.com/panyam/servicekit/hybrid/demo/gen"
 	"github.com/panyam/servicekit/hybrid/demo/gen/genconnect"
 	"google.golang.org/grpc"

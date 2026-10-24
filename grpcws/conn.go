@@ -33,7 +33,7 @@ type ControlMessage struct {
 	Type   string `json:"type"`
 	Data   any    `json:"data,omitempty"`
 	Error  string `json:"error,omitempty"`
-	PingId int64  `json:"pingId,omitempty"`
+	PingID int64  `json:"pingId,omitempty"`
 }
 
 // ============================================================================
@@ -281,7 +281,7 @@ func (c *baseGRPCConn) OnStart(conn *websocket.Conn) error {
 func (c *baseGRPCConn) SendPing() error {
 	c.SendOutput(ControlMessage{
 		Type:   TypePing,
-		PingId: c.PingId.Add(1),
+		PingID: c.PingID.Add(1),
 	})
 	return nil
 }

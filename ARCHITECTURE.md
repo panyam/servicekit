@@ -94,7 +94,7 @@ HTTP Request → SSEHandler.Validate() → SSEConn created
 
 **SSEHub[O]** — Session manager for SSE connections:
 - Instance-based (not global) for testability
-- Register/Unregister connections by ConnId
+- Register/Unregister connections by ConnID
 - Send (targeted) and Broadcast (all) with optional event types
 - CloseAll for graceful shutdown
 
@@ -174,15 +174,15 @@ Generic connection type that handles:
 - WebSocket read/write with codec
 - Thread-safe writes via `OutgoingMessage[O]` union type
 - Ping-pong heartbeat mechanism (transport-level, always JSON)
-- Connection identification (`Name()`, `ConnId()`)
+- Connection identification (`Name()`, `ConnID()`)
 
 ```go
 type BaseConn[I any, O any] struct {
     Codec     Codec[I, O]
     Writer    *conc.Writer[OutgoingMessage[O]]
     NameStr   string
-    ConnIdStr string
-    PingId    atomic.Int64
+    ConnIDStr string
+    PingID    atomic.Int64
     WriteTimeout time.Duration // per-write deadline; 0 = none
 }
 
