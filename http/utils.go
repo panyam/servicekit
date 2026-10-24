@@ -11,15 +11,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// JsonToQueryString converts a map to a URL query string.
+// JSONToQueryString converts a map to a URL query string.
 // Keys are sorted alphabetically for deterministic output.
 // Values are converted to strings using fmt.Sprintf("%v", value).
 //
 // Example:
 //
 //	params := map[string]any{"name": "John", "age": 30}
-//	qs := JsonToQueryString(params) // "age=30&name=John"
-func JsonToQueryString(json map[string]any) string {
+//	qs := JSONToQueryString(params) // "age=30&name=John"
+func JSONToQueryString(json map[string]any) string {
 	// Sort keys for deterministic output
 	keys := make([]string, 0, len(json))
 	for key := range json {
@@ -54,7 +54,7 @@ func WSConnWriteMessage(wsConn *websocket.Conn, msg any) error {
 	return nil
 }
 
-// NormalizeWsUrl converts an HTTP(S) URL to its WebSocket equivalent.
+// NormalizeWSURL converts an HTTP(S) URL to its WebSocket equivalent.
 // It performs the following transformations:
 //   - Removes trailing slashes
 //   - Converts "http:" to "ws:"
@@ -65,8 +65,8 @@ func WSConnWriteMessage(wsConn *websocket.Conn, msg any) error {
 //
 // Example:
 //
-//	NormalizeWsUrl("https://example.com/ws/") // "wss://example.com/ws"
-func NormalizeWsUrl(httpOrWsUrl string) string {
+//	NormalizeWSURL("https://example.com/ws/") // "wss://example.com/ws"
+func NormalizeWSURL(httpOrWsUrl string) string {
 	if strings.HasSuffix(httpOrWsUrl, "/") {
 		httpOrWsUrl = (httpOrWsUrl)[:len(httpOrWsUrl)-1]
 	}

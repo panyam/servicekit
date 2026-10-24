@@ -52,7 +52,7 @@ Provides lifecycle and message handling methods:
 type BiDirStreamConn[I any] interface {
     SendPing() error
     Name() string
-    ConnId() string
+    ConnID() string
     HandleMessage(msg I) error
     OnError(err error) error
     OnClose()
@@ -82,7 +82,7 @@ type Codec[I any, O any] interface {
 | `protocodec.ProtoJSONCodec[I, O]` | `proto.Message` | JSON text | Proto messages, human-readable |
 | `protocodec.BinaryProtoCodec[I, O]` | `proto.Message` | Binary | Proto messages, max efficiency |
 
-The proto codecs are in `servicekit/http/protocodec`, and the gRPC-status helpers (`SendJsonResponse`, `ErrorToHttpCode`) are in `servicekit/http/grpcutil`. A server that only uses the JSON codecs doesn't link grpc or protobuf, and `make check-deps` keeps it that way.
+The proto codecs are in `servicekit/http/protocodec`, and the gRPC-status helpers (`SendJSONResponse`, `ErrorToHTTPCode`) are in `servicekit/http/grpcutil`. A server that only uses the JSON codecs doesn't link grpc or protobuf, and `make check-deps` keeps it that way.
 
 ### BaseConn[I, O]
 
@@ -93,8 +93,8 @@ type BaseConn[I any, O any] struct {
     Codec     Codec[I, O]
     Writer    *conc.Writer[OutgoingMessage[O]]
     NameStr   string
-    ConnIdStr string
-    PingId    atomic.Int64
+    ConnIDStr string
+    PingID    atomic.Int64
 }
 ```
 
@@ -318,7 +318,7 @@ func (c *CustomConn) SendPing() error {
         "type":      "ping",
         "pingId":    c.pingCount,
         "timestamp": c.lastPingTime.Unix(),
-        "connId":    c.ConnId(),
+        "connId":    c.ConnID(),
     }
     
     c.Writer.Send(gohttp.OutgoingMessage[any]{Data: &pingMsg})
@@ -354,7 +354,7 @@ func (c *CustomConn) HandleMessage(msg any) error {
 }
 
 func (c *CustomConn) OnTimeout() bool {
-    log.Printf("Connection %s timed out after %d pings", c.ConnId(), c.pingCount)
+    log.Printf("Connection %s timed out after %d pings", c.ConnID(), c.pingCount)
     return true // Close the connection
 }
 ```
@@ -645,7 +645,7 @@ func (r *ResilientConn) OnError(err error) error {
 }
 
 func (r *ResilientConn) OnTimeout() bool {
-    log.Printf("Connection timeout for %s", r.ConnId())
+    log.Printf("Connection timeout for %s", r.ConnID())
     
     // Try to send a final message before closing
     r.Writer.Send(gohttp.OutgoingMessage[any]{Data: &map[string]any{
@@ -678,7 +678,7 @@ func (cm *ConnectionManager) AddConnection(conn *ManagedConn) bool {
         return false
     }
     
-    cm.connections[conn.ConnId()] = conn
+    cm.connections[conn.ConnID()] = conn
     atomic.AddInt64(&cm.connCount, 1)
     return true
 }
@@ -755,7 +755,7 @@ hub := gohttp.NewSSEHub[any]()
 
 // Register/unregister in lifecycle hooks
 hub.Register(conn)
-hub.Unregister(conn.ConnId())
+hub.Unregister(conn.ConnID())
 
 // Targeted and broadcast delivery
 hub.Send(sessionId, msg)          // one connection

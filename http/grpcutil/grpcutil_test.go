@@ -28,8 +28,8 @@ func TestErrorToHttpCode(t *testing.T) {
 		{status.Error(codes.Unavailable, "x"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
-		if got := ErrorToHttpCode(c.err); got != c.want {
-			t.Errorf("ErrorToHttpCode(%v) = %d, want %d", c.err, got, c.want)
+		if got := ErrorToHTTPCode(c.err); got != c.want {
+			t.Errorf("ErrorToHTTPCode(%v) = %d, want %d", c.err, got, c.want)
 		}
 	}
 }
@@ -49,7 +49,7 @@ func TestSendJsonResponse(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			SendJsonResponse(rec, c.resp, c.err)
+			SendJSONResponse(rec, c.resp, c.err)
 			if rec.Code != c.wantCode {
 				t.Errorf("status %d, want %d", rec.Code, c.wantCode)
 			}

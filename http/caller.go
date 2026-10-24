@@ -22,39 +22,39 @@ import (
 // For internal endpoints with self-signed certificates, either pass a custom
 // *http.Client via WithClient or use the WithInsecureTLS option on Call/CallVoid.
 var (
-	DefaultHttpClient   *http.Client
-	LowQPSHttpClient    *http.Client
-	MediumQPSHttpClient *http.Client
-	HighQPSHttpClient   *http.Client
+	DefaultHTTPClient   *http.Client
+	LowQPSHTTPClient    *http.Client
+	MediumQPSHTTPClient *http.Client
+	HighQPSHTTPClient   *http.Client
 )
 
-// insecureDefaultHttpClient is the shared client used by WithInsecureTLS.
+// insecureDefaultHTTPClient is the shared client used by WithInsecureTLS.
 // Lazily initialized to avoid paying for a tls.Config when no caller asks for it.
 var (
-	insecureDefaultHttpClient     *http.Client
-	insecureDefaultHttpClientOnce sync.Once
+	insecureDefaultHTTPClient     *http.Client
+	insecureDefaultHTTPClientOnce sync.Once
 )
 
 func init() {
-	DefaultHttpClient = &http.Client{
+	DefaultHTTPClient = &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: &http.Transport{},
 	}
-	LowQPSHttpClient = &http.Client{
+	LowQPSHTTPClient = &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 5,
 		},
 	}
-	MediumQPSHttpClient = &http.Client{
+	MediumQPSHTTPClient = &http.Client{
 		Timeout: 20 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        20,
 			MaxIdleConnsPerHost: 10,
 		},
 	}
-	HighQPSHttpClient = &http.Client{
+	HighQPSHTTPClient = &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        40,
@@ -64,15 +64,15 @@ func init() {
 }
 
 func getInsecureDefaultHttpClient() *http.Client {
-	insecureDefaultHttpClientOnce.Do(func() {
-		insecureDefaultHttpClient = &http.Client{
+	insecureDefaultHTTPClientOnce.Do(func() {
+		insecureDefaultHTTPClient = &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 		}
 	})
-	return insecureDefaultHttpClient
+	return insecureDefaultHTTPClient
 }
 
 // HTTPError is returned for non-2xx responses. Body and Header preserve the
@@ -105,7 +105,7 @@ type callConfig struct {
 }
 
 // WithClient overrides the *http.Client used to perform the request.
-// If unset, DefaultHttpClient is used.
+// If unset, DefaultHTTPClient is used.
 func WithClient(c *http.Client) CallOption {
 	return func(cfg *callConfig) { cfg.client = c }
 }
@@ -151,12 +151,12 @@ func CallVoid(ctx context.Context, req *http.Request, opts ...CallOption) error 
 }
 
 func doCall(ctx context.Context, req *http.Request, opts []CallOption) ([]byte, *http.Response, error) {
-	cfg := callConfig{client: DefaultHttpClient}
+	cfg := callConfig{client: DefaultHTTPClient}
 	for _, o := range opts {
 		o(&cfg)
 	}
 	if cfg.client == nil {
-		cfg.client = DefaultHttpClient
+		cfg.client = DefaultHTTPClient
 	}
 
 	req = req.WithContext(ctx)
@@ -180,8 +180,8 @@ func doCall(ctx context.Context, req *http.Request, opts []CallOption) ([]byte, 
 	return body, resp, nil
 }
 
-// MakeUrl creates a URL from host, path, and optional pre-encoded query args.
-func MakeUrl(host, path string, args string) (url string) {
+// MakeURL creates a URL from host, path, and optional pre-encoded query args.
+func MakeURL(host, path string, args string) (url string) {
 	path = strings.TrimPrefix(path, "/")
 	url = fmt.Sprintf("%s/%s", host, path)
 	if args != "" {
@@ -199,8 +199,8 @@ func NewRequest(method string, endpoint string, bodyReader io.Reader) (req *http
 	return
 }
 
-// NewJsonRequest marshals body as JSON and wraps NewRequest.
-func NewJsonRequest(method string, endpoint string, body map[string]any) (req *http.Request, err error) {
+// NewJSONRequest marshals body as JSON and wraps NewRequest.
+func NewJSONRequest(method string, endpoint string, body map[string]any) (req *http.Request, err error) {
 	var bodyBytes []byte
 	if body != nil {
 		bodyBytes, err = json.Marshal(body)
@@ -220,12 +220,12 @@ func NewBytesRequest(method string, endpoint string, body []byte) (req *http.Req
 	return NewRequest(method, endpoint, bodyReader)
 }
 
-// JsonGet performs a GET and decodes the body via gut.JsonDecodeBytes.
+// JSONGet performs a GET and decodes the body via gut.JsonDecodeBytes.
 // onReq, if non-nil, is invoked to customize the request before sending.
 //
-// Prefer Call[T] for typed responses; JsonGet remains for callers that
+// Prefer Call[T] for typed responses; JSONGet remains for callers that
 // want the raw response alongside the decoded body.
-func JsonGet(url string, onReq func(req *http.Request)) (any, *http.Response, error) {
+func JSONGet(url string, onReq func(req *http.Request)) (any, *http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, nil, err

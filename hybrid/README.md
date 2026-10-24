@@ -41,7 +41,9 @@ watch.MarshalOptions, watch.UnmarshalOptions = pj.Marshal, pj.Unmarshal
 
 m := hybrid.NewMux()
 m.Gateway("/v1/", gw)
-m.Connect(genconnect.NewGameServiceHandler(connectImpl, pj.ConnectOption()))
+cs := connect.NewServer()                                 // connectrpc.com/connect/v2
+genconnect.RegisterGameServiceHandler(cs, connectImpl)
+m.Connect(cs, pj.ConnectOption())
 m.Handle("GET /ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
 http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 ```
@@ -54,4 +56,4 @@ http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 |---|---|
 | `make test` | unit tests plus the demo's interop tests |
 | `make exercise` | runs `cmd/demo -check`: fetch one game three ways, print, exit 1 if they differ |
-| `make gen` | regenerate `demo/gen` with buf (remote plugins, Connect pinned to v1) |
+| `make gen` | regenerate `demo/gen` with buf (remote plugins, Connect pinned to v2.0.2) |

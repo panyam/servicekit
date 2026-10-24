@@ -64,7 +64,7 @@ func (u *URLWaiter) Run() (success bool, iter int, err error) {
 				return false, iter, err
 			}
 		} else {
-			req, err = NewJsonRequest(u.Method, u.Url, u.Payload)
+			req, err = NewJSONRequest(u.Method, u.Url, u.Payload)
 			if err == nil && u.Headers != nil {
 				for k, v := range u.Headers {
 					req.Header.Set(k, v)

@@ -191,7 +191,7 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
 | `http/streamable.go` | StreamableServe for POST-that-optionally-streams (MCP 2025-03-26) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
-| `connectbridge/bridge.go` | ConnectStreamBridge[T] — Connect ServerStream → gRPC ServerStreamingServer adapter |
+| `hybrid/connectbridge/bridge.go` | ConnectStreamBridge[T] — Connect server stream (any `Sender[T]`) → gRPC ServerStreamingServer adapter |
 | `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |
 | `cmd/grpcws-demo/` | Multiplayer game demo with GameHub |

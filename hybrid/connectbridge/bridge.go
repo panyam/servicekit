@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 
-	"connectrpc.com/connect"
 	"google.golang.org/grpc/metadata"
 )
 
-// connectSender is the minimal subset of *connect.ServerStream[T] the bridge
-// depends on. Keeping it unexported lets tests inject fakes while the public
-// constructor continues to accept the concrete connect type.
-type connectSender[T any] interface {
+// Sender is the one method the bridge needs from a Connect server stream. Both
+// Connect majors have it: v1's *connect.ServerStream[T], and the per-method
+// stream struct v2 generates (Game<Service><Method>ServerStream). Because the
+// bridge depends only on this, it doesn't import either major.
+type Sender[T any] interface {
 	Send(*T) error
 }
 
-// ConnectStreamBridge adapts a *connect.ServerStream[T] to satisfy
+// ConnectStreamBridge adapts a Connect server stream to satisfy
 // grpc.ServerStreamingServer[T]. It lets a Connect handler delegate a
 // server-streaming RPC to a gRPC-shape service implementation.
 //
@@ -23,12 +23,17 @@ type connectSender[T any] interface {
 // propagation is deferred until a consumer needs it.
 type ConnectStreamBridge[T any] struct {
 	ctx    context.Context
-	stream connectSender[T]
+	stream Sender[T]
 }
 
-// NewConnectStreamBridge wraps a Connect server stream so it can be passed
-// to gRPC-generated server-streaming code.
-func NewConnectStreamBridge[T any](ctx context.Context, s *connect.ServerStream[T]) *ConnectStreamBridge[T] {
+// NewConnectStreamBridge wraps a Connect server stream so it can be passed to
+// gRPC-generated server-streaming code. ctx is what Context returns; pass the
+// handler's context so cancellation reaches the gRPC-shape implementation.
+//
+// Until v0.2.0 this took a *connect.ServerStream[T] (Connect v1). That type
+// still satisfies Sender[T], so v1 callers need no change beyond the import
+// path, github.com/panyam/servicekit/hybrid/connectbridge.
+func NewConnectStreamBridge[T any](ctx context.Context, s Sender[T]) *ConnectStreamBridge[T] {
 	return &ConnectStreamBridge[T]{ctx: ctx, stream: s}
 }
 

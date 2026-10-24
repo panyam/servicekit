@@ -1,6 +1,7 @@
 package http
 
 import (
+	"iter"
 	"sync"
 )
 
@@ -39,18 +40,38 @@ type EventStore interface {
 	// insertion time within a stream.
 	Store(streamID string, event StoredEvent) error
 
-	// Replay returns all events stored after the event with the given
-	// lastEventID. If lastEventID is not found in the stream, all stored
-	// events are returned (conservative fallback — the client may have
-	// been disconnected long enough for the anchor event to be evicted).
+	// Replay yields, in insertion order, the events stored after the event
+	// with the given lastEventID. If lastEventID is not in the stream (never
+	// stored, or already evicted), it yields every stored event, since the
+	// client may have been away long enough for its anchor to be dropped.
+	// It yields nothing for an unknown stream or when lastEventID is the most
+	// recent event.
 	//
-	// Returns an empty slice if the stream does not exist or if
-	// lastEventID is the most recent event.
-	Replay(streamID string, lastEventID string) ([]StoredEvent, error)
+	// A backend that fails part-way yields a zero StoredEvent with the error
+	// and stops. Breaking out of the loop early must release any resources
+	// the iterator holds. Use ReplayAll to collect the events into a slice.
+	//
+	// The iterator is consumed as the events are written to a client, which
+	// can be slow, so it must not block Store on the same stream while the
+	// caller is between events.
+	Replay(streamID string, lastEventID string) iter.Seq2[StoredEvent, error]
 
 	// Trim removes all stored events for the given stream. Call this
 	// when a session is destroyed to prevent unbounded memory growth.
 	Trim(streamID string) error
+}
+
+// ReplayAll collects store.Replay into a slice. It returns the events read
+// before the first error along with that error.
+func ReplayAll(store EventStore, streamID string, lastEventID string) ([]StoredEvent, error) {
+	var out []StoredEvent
+	for ev, err := range store.Replay(streamID, lastEventID) {
+		if err != nil {
+			return out, err
+		}
+		out = append(out, ev)
+	}
+	return out, nil
 }
 
 // ============================================================================
@@ -107,35 +128,31 @@ func (s *MemoryEventStore) Store(streamID string, event StoredEvent) error {
 	return nil
 }
 
-// Replay returns all events after lastEventID by scanning for it in the
-// stream's insertion-ordered slice. If lastEventID is not found (e.g.,
-// evicted), all stored events are returned as a conservative fallback.
-func (s *MemoryEventStore) Replay(streamID string, lastEventID string) ([]StoredEvent, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	events := s.streams[streamID]
-	if len(events) == 0 {
-		return nil, nil
-	}
-
-	// Scan for the anchor event
-	for i, ev := range events {
-		if ev.ID == lastEventID {
-			// Return everything after the anchor
-			if i+1 >= len(events) {
-				return nil, nil // anchor is the last event
+// Replay yields the events after lastEventID without copying them, and
+// without holding the lock while it yields.
+//
+// It takes the stream's slice header under the read lock and iterates it after
+// releasing the lock. That snapshot stays valid: Store only appends past its
+// length or swaps in a new slice on eviction, and never writes to an element
+// the snapshot can see. Events stored after Replay starts aren't yielded.
+func (s *MemoryEventStore) Replay(streamID string, lastEventID string) iter.Seq2[StoredEvent, error] {
+	return func(yield func(StoredEvent, error) bool) {
+		s.mu.RLock()
+		events := s.streams[streamID]
+		s.mu.RUnlock()
+		start := 0
+		for i, ev := range events {
+			if ev.ID == lastEventID {
+				start = i + 1
+				break
 			}
-			result := make([]StoredEvent, len(events)-i-1)
-			copy(result, events[i+1:])
-			return result, nil
+		}
+		for _, ev := range events[start:] {
+			if !yield(ev, nil) {
+				return
+			}
 		}
 	}
-
-	// Anchor not found — return all events (conservative fallback)
-	result := make([]StoredEvent, len(events))
-	copy(result, events)
-	return result, nil
 }
 
 // Trim removes all stored events for the given stream.

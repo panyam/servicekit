@@ -1,6 +1,29 @@
 # Upgrading Guide
 
-## v0.1.x → v0.2.0: proto codecs and gRPC helpers moved
+## v0.1.x → v0.2.0
+
+v0.2.0 batches every breaking change we had queued. In order of how likely you are to hit it:
+
+1. **Initialisms.** `ConnId()` is now `ConnID()` on `WSConn`, `BiDirStreamConn` and `SSEConn`, so an embedder that overrides it renames its method, and every call site changes. Wire JSON (`"connId"`, `"pingId"`) is unchanged.
+2. **Proto codecs and gRPC helpers moved** out of `servicekit/http` (table below).
+3. **`EventStore.Replay` returns an iterator**, `iter.Seq2[StoredEvent, error]`. Loop over it with `for ev, err := range store.Replay(id, last)`, or call `gohttp.ReplayAll(store, id, last)` for the old slice. A custom store implements `Replay` as an iterator, and must not hold a lock its `Store` needs while it yields.
+4. **`connectbridge` moved** to `github.com/panyam/servicekit/hybrid/connectbridge` (a separate module). `NewConnectStreamBridge` now takes any `Sender[T]` (`Send(*T) error`). A Connect v1 `*connect.ServerStream[T]` still fits, so v1 callers change only the import.
+5. **`auth/` is deleted.** Use goapplib's `WithAuth` mixin and its oneauth-backed `AuthService`, or oneauth directly.
+6. **`hybrid` is on Connect v2** (`connectrpc.com/connect/v2`). See `hybrid/README.md`.
+
+| Before | After |
+|---|---|
+| `ConnId()`, `ConnIdStr`, `PingId` | `ConnID()`, `ConnIDStr`, `PingID` |
+| `gohttp.JsonGet`, `JsonToQueryString`, `NewJsonRequest` | `gohttp.JSONGet`, `JSONToQueryString`, `NewJSONRequest` |
+| `gohttp.MakeUrl`, `NormalizeWsUrl` | `gohttp.MakeURL`, `NormalizeWSURL` |
+| `gohttp.DefaultHttpClient`, `LowQPSHttpClient`, `MediumQPSHttpClient`, `HighQPSHttpClient` | `…HTTPClient` |
+| `events, err := store.Replay(id, last)` | `events, err := gohttp.ReplayAll(store, id, last)` |
+| `github.com/panyam/servicekit/connectbridge` | `github.com/panyam/servicekit/hybrid/connectbridge` |
+| `github.com/panyam/servicekit/auth` | removed |
+
+There are no deprecated wrappers: we checked mcpkit, massrelay, chakra, declaire, demokit, goapplib, oneauth and lilbattle, and only `ConnId` (7 call sites) and `Replay` (2, in mcpkit) have outside callers.
+
+### Proto codecs and gRPC helpers moved
 
 `servicekit/http` no longer imports grpc or protobuf, so a JSON-only server stops linking them (a minimal WebSocket server goes from 14.8 MB to 9.5 MB). Six exported names moved to two sub-packages, and their behaviour is unchanged:
 
@@ -8,8 +31,8 @@
 |---|---|
 | `gohttp.ProtoJSONCodec` | `protocodec.ProtoJSONCodec` (`servicekit/http/protocodec`) |
 | `gohttp.BinaryProtoCodec` | `protocodec.BinaryProtoCodec` |
-| `gohttp.SendJsonResponse` | `grpcutil.SendJsonResponse` (`servicekit/http/grpcutil`) |
-| `gohttp.ErrorToHttpCode` | `grpcutil.ErrorToHttpCode` |
+| `gohttp.SendJsonResponse` | `grpcutil.SendJSONResponse` (`servicekit/http/grpcutil`) |
+| `gohttp.ErrorToHttpCode` | `grpcutil.ErrorToHTTPCode` |
 | `gohttp.WSConnWriteError` | `grpcutil.WSConnWriteError` |
 | `gohttp.WSConnJSONReaderWriter` | `grpcutil.WSConnJSONReaderWriter` |
 

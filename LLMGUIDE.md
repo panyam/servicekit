@@ -339,7 +339,7 @@ func (h *MySSEHandler) Validate(w http.ResponseWriter, r *http.Request) (*MySSEC
 
 // In your SSE connection's OnClose, unregister:
 func (c *MySSEConn) OnClose() {
-    hub.Unregister(c.ConnId())
+    hub.Unregister(c.ConnID())
     c.BaseSSEConn.OnClose()
 }
 
@@ -440,7 +440,9 @@ watch.MarshalOptions, watch.UnmarshalOptions = pj.Marshal, pj.Unmarshal
 
 m := hybrid.NewMux()
 m.Gateway("/v1/", gw)                                     // under a prefix, so it can't swallow other routes
-m.Connect(genconnect.NewGameServiceHandler(connectImpl, pj.ConnectOption()))
+cs := connect.NewServer()                                 // connectrpc.com/connect/v2
+genconnect.RegisterGameServiceHandler(cs, connectImpl)
+m.Connect(cs, pj.ConnectOption())
 m.Handle("GET /ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
 http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 ```
@@ -588,6 +590,6 @@ Validate() → OnStart() → [SendOutput/SendEvent...] → OnClose()
 | Messages not received | Forgot `OnStart()` parent call | Call `c.JSONConn.OnStart(conn)` |
 | Client not responding to ping | Wrong client library | Use `GRPCWSClient` for grpcws endpoints |
 | Binary messages not working | Codec mismatch | Match client codec to server codec |
-| `undefined: gohttp.ProtoJSONCodec` (or `SendJsonResponse`) | Moved in v0.2.0 | Import `servicekit/http/protocodec` (or `http/grpcutil`); see UPGRADING.md |
+| `undefined: gohttp.ProtoJSONCodec` (or `SendJSONResponse`) | Moved in v0.2.0 | Import `servicekit/http/protocodec` (or `http/grpcutil`); see UPGRADING.md |
 | Socket stays open after `stream_end` | Default behaviour | Set `handler.CloseOnStreamEnd = true` |
 | Client that stopped reading holds its connection for minutes | No write deadline | Set `handler.WriteTimeout` (grpcws) or `BaseConn.WriteTimeout` |

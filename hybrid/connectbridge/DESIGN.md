@@ -6,16 +6,16 @@ depends_on:
 entities:
   - name: ConnectStreamBridge
     kind: struct
-    role: Wraps a *connect.ServerStream[T] to satisfy grpc.ServerStreamingServer[T].
+    role: Wraps a Connect server stream (any Sender[T]) to satisfy grpc.ServerStreamingServer[T].
     why: Lets one server-streaming impl serve both Connect and gRPC transports without forking the handler; metadata methods are deliberately no-ops in v1.
-  - name: connectSender
+  - name: Sender
     kind: interface
-    role: Unexported minimal Send-only subset of *connect.ServerStream[T] that the bridge actually depends on.
-    why: Connect's ServerStream has no exported constructor, so narrowing to this seam is the only way tests can inject a fake while the public constructor still takes the concrete type.
+    role: The one method the bridge needs, Send(*T) error.
+    why: Connect v1's *connect.ServerStream[T] and v2's generated per-method stream structs both have it, so depending on it alone keeps the package free of either Connect major (v0.2.0, issue 55) and lets tests pass a fake.
   - name: NewConnectStreamBridge
     kind: func
-    role: Constructor wrapping a concrete *connect.ServerStream[T] with a context.
-    why: Keeps the public API tied to the concrete connect type while internals hold the connectSender seam.
+    role: Constructor wrapping any Sender[T] with the handler's context.
+    why: Took *connect.ServerStream[T] until v0.2.0; v1 callers still compile since that type satisfies Sender[T].
   - name: SendMsg
     kind: func
     role: gRPC-interface entry point; type-asserts any to *T then forwards, else errors.

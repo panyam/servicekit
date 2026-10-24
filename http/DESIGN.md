@@ -28,7 +28,7 @@ entities:
     why: Lets codecs decide text-vs-binary framing while keeping the gorilla constant values.
   - name: BiDirStreamConn
     kind: interface
-    role: Lifecycle+message contract for any bidirectional stream (SendPing/HandleMessage/OnError/OnClose/OnTimeout/Name/ConnId).
+    role: Lifecycle+message contract for any bidirectional stream (SendPing/HandleMessage/OnError/OnClose/OnTimeout/Name/ConnID).
     why: Transport-agnostic core so WSConn extends it; OnTimeout returning false lets long-silent connections stay alive.
   - name: BiDirStreamConfig
     kind: struct
@@ -64,7 +64,7 @@ entities:
     why: Forces every write type onto a single channel so gorilla's no-concurrent-write rule is never violated.
   - name: PingData
     kind: struct
-    role: Ping metadata (PingId/ConnId/Name) sent as JSON text.
+    role: Ping metadata (PingID/ConnID/Name) sent as JSON text.
     why: Pings are always JSON-at-transport regardless of data codec — debuggable and codec-independent.
   - name: BaseHandler
     kind: struct
@@ -112,7 +112,7 @@ entities:
     why: Zero-config SSE endpoint helper.
   - name: SSEHub
     kind: struct
-    role: Instance-based registry of BaseSSEConn keyed by ConnId with Send/Broadcast/CloseAll.
+    role: Instance-based registry of BaseSSEConn keyed by ConnID with Send/Broadcast/CloseAll.
     why: Instance (not global) for testability and multi-hub processes; Broadcast queues per-connection so a slow client can't block others; Register/Unregister deliberately do NOT manage connection lifecycle.
   - name: SSEEventReader
     kind: struct
@@ -124,8 +124,8 @@ entities:
     why: Comment is captured (not discarded) so tests can assert on keepalives.
   - name: EventStore
     kind: interface
-    role: Persist/Replay/Trim SSE events for Last-Event-ID resumption.
-    why: Replay falls back to returning ALL events when the anchor ID is missing (conservative — assume the client missed everything rather than nothing).
+    role: Persist/Replay/Trim SSE events for Last-Event-ID resumption. Replay yields an iter.Seq2[StoredEvent, error]; ReplayAll collects it.
+    why: Replay is an iterator (issue 20) so a DB/Redis store can stream rows and a slow SSE consumer never holds a store lock; it falls back to yielding ALL events when the anchor ID is missing (conservative — assume the client missed everything rather than nothing).
   - name: MemoryEventStore
     kind: struct
     role: Bounded in-memory EventStore with FIFO eviction per stream.
@@ -174,11 +174,11 @@ entities:
     kind: struct
     role: Error for non-2xx Call/CallVoid responses (Code/Body/Header).
     why: Keeps raw body+cloned headers so callers can parse structured errors or read Retry-After.
-  - name: NewRequest / NewJsonRequest / NewBytesRequest / MakeUrl / JsonGet
+  - name: NewRequest / NewJSONRequest / NewBytesRequest / MakeURL / JSONGet
     kind: func
     role: JSON-request builders and a raw GET helper.
-    why: NewRequest defaults Content-Type to application/json; JsonGet kept for callers wanting the raw *http.Response alongside decoded body.
-  - name: DefaultHttpClient (+Low/Medium/High QPS)
+    why: NewRequest defaults Content-Type to application/json; JSONGet kept for callers wanting the raw *http.Response alongside decoded body.
+  - name: DefaultHTTPClient (+Low/Medium/High QPS)
     kind: const
     role: Package-level pre-tuned http.Client pool sizes.
     why: TLS verification ON by default; tiered idle-conn limits per expected QPS.
@@ -242,10 +242,10 @@ entities:
     kind: func
     role: Constructors returning sensible defaults for each config struct.
     why: Centralize the production-vs-dev default story (allow-all origins, 30s ping, etc.).
-  - name: JsonToQueryString / WSConnWriteMessage / NormalizeWsUrl
+  - name: JSONToQueryString / WSConnWriteMessage / NormalizeWSURL
     kind: func
     role: Misc server-side HTTP/WS helpers (query encoding, raw WS JSON writes, ws/wss URL normalization).
-    why: grpc-free; the gRPC-status helpers (SendJsonResponse, ErrorToHttpCode, WSConnWriteError, WSConnJSONReaderWriter) moved to http/grpcutil.
+    why: grpc-free; the gRPC-status helpers (SendJSONResponse, ErrorToHTTPCode, WSConnWriteError, WSConnJSONReaderWriter) moved to http/grpcutil.
   - name: URLWaiter
     kind: struct
     role: Polls a URL until it returns success (readiness gate for dependencies).

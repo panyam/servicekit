@@ -51,9 +51,9 @@ type BiDirStreamConn[I any] interface {
 	// Used for logging and debugging purposes.
 	Name() string
 
-	// ConnId returns a unique identifier for this specific connection instance.
+	// ConnID returns a unique identifier for this specific connection instance.
 	// Useful for tracking individual connections in logs and metrics.
-	ConnId() string
+	ConnID() string
 
 	// HandleMessage processes an incoming message of type I.
 	// Called for each message received from the remote peer.

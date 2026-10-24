@@ -69,11 +69,11 @@ func (c *ClientStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) 
 
 	case TypePong:
 		// Heartbeat response
-		log.Printf("Received pong from client %s", c.ConnId())
+		log.Printf("Received pong from client %s", c.ConnID())
 
 	case TypeCancel:
 		// Client requested cancellation
-		log.Printf("Client %s requested stream cancellation", c.ConnId())
+		log.Printf("Client %s requested stream cancellation", c.ConnID())
 		c.cancel()
 
 	default:
@@ -86,7 +86,7 @@ func (c *ClientStreamConn[Req, Resp, Stream]) HandleMessage(msg ControlMessage) 
 // OnClose cancels the stream and cleans up
 func (c *ClientStreamConn[Req, Resp, Stream]) OnClose() {
 	c.baseGRPCConn.OnClose()
-	log.Printf("ClientStreamConn %s closed: received %d messages", c.ConnId(), c.metrics.Received())
+	log.Printf("ClientStreamConn %s closed: received %d messages", c.ConnID(), c.metrics.Received())
 }
 
 // ============================================================================

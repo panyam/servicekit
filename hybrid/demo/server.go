@@ -8,12 +8,13 @@ import (
 	"net"
 	"net/http"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/panyam/servicekit/connectbridge"
 	"github.com/panyam/servicekit/grpcws"
 	gohttp "github.com/panyam/servicekit/http"
 	"github.com/panyam/servicekit/hybrid"
+	"github.com/panyam/servicekit/hybrid/connectbridge"
 	"github.com/panyam/servicekit/hybrid/demo/gen"
 	"github.com/panyam/servicekit/hybrid/demo/gen/genconnect"
 	"google.golang.org/grpc"
@@ -49,19 +50,16 @@ func (g *Games) WatchGame(req *gen.GetGameRequest, stream grpc.ServerStreamingSe
 	return stream.Send(game)
 }
 
-type connectGames struct{ g *Games }
+// connectGames is the Connect (v2) face of Games. GetGame already has the
+// signature Connect v2 wants; WatchGame needs connectbridge to turn Connect's
+// generated stream into the grpc.ServerStreamingServer the shared code takes.
+type connectGames struct{ *Games }
 
-func (c connectGames) GetGame(ctx context.Context, req *connect.Request[gen.GetGameRequest]) (*connect.Response[gen.Game], error) {
-	game, err := c.g.GetGame(ctx, req.Msg)
-	if err != nil {
-		return nil, err
-	}
-	return connect.NewResponse(game), nil
+func (c connectGames) WatchGame(ctx context.Context, req *gen.GetGameRequest, stream genconnect.GameServiceWatchGameServerStream) error {
+	return c.Games.WatchGame(req, connectbridge.NewConnectStreamBridge[gen.Game](ctx, stream))
 }
 
-func (c connectGames) WatchGame(ctx context.Context, req *connect.Request[gen.GetGameRequest], stream *connect.ServerStream[gen.Game]) error {
-	return c.g.WatchGame(req.Msg, connectbridge.NewConnectStreamBridge(ctx, stream))
-}
+var _ genconnect.GameServiceHandler = connectGames{}
 
 // Config picks the JSON options. A nil ProtoJSON leaves each transport on its
 // own default, which is what a server wired up by hand gets, and the JSON then
@@ -87,7 +85,7 @@ const (
 // New wires games into a hybrid.Mux.
 func New(ctx context.Context, games *Games, cfg Config) (*Server, error) {
 	var gwOpts []runtime.ServeMuxOption
-	var connectOpts []connect.HandlerOption
+	var connectOpts []connecthttp.Option
 	var pj hybrid.ProtoJSON
 	if cfg.ProtoJSON != nil {
 		pj = *cfg.ProtoJSON
@@ -126,7 +124,9 @@ func New(ctx context.Context, games *Games, cfg Config) (*Server, error) {
 
 	m := hybrid.NewMux()
 	m.Gateway("/v1/", gw)
-	m.Connect(genconnect.NewGameServiceHandler(connectGames{games}, connectOpts...))
+	cs := connect.NewServer()
+	genconnect.RegisterGameServiceHandler(cs, connectGames{games})
+	m.Connect(cs, connectOpts...)
 	m.Handle("GET "+WatchPath+"{game_id}/watch", gohttp.WSServe(watch, nil))
 
 	return &Server{

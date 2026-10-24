@@ -2,17 +2,17 @@ package http
 
 import "fmt"
 
-func ExampleJsonToQueryString() {
+func ExampleJSONToQueryString() {
 	input := map[string]any{"a": 1, "b": 2}
-	queryStr := JsonToQueryString(input)
+	queryStr := JSONToQueryString(input)
 	fmt.Println(queryStr)
 
 	// Output: a=1&b=2
 }
 
-func ExampleNormalizeWsUrl() {
-	fmt.Println(NormalizeWsUrl("http://google.com"))
-	fmt.Println(NormalizeWsUrl("https://github.com"))
+func ExampleNormalizeWSURL() {
+	fmt.Println(NormalizeWSURL("http://google.com"))
+	fmt.Println(NormalizeWSURL("https://github.com"))
 
 	// Output:
 	// ws://google.com

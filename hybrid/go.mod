@@ -3,7 +3,7 @@ module github.com/panyam/servicekit/hybrid
 go 1.26.0
 
 require (
-	connectrpc.com/connect v1.19.2
+	connectrpc.com/connect/v2 v2.0.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.32.0
 	github.com/panyam/servicekit v0.1.12

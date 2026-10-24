@@ -13,6 +13,20 @@ and are not back-filled here.
   `WSConnWriteError` and `WSConnJSONReaderWriter` moved to
   `servicekit/http/grpcutil`. Behaviour is unchanged, and there are no aliases
   (see UPGRADING.md) (issue 17).
+- Go-style initialisms with no deprecated wrappers: `ConnID()` (on `WSConn`,
+  `BiDirStreamConn`, `SSEConn`), `ConnIDStr`, `PingID`, `JSONGet`,
+  `JSONToQueryString`, `NewJSONRequest`, `MakeURL`, `NormalizeWSURL`,
+  `DefaultHTTPClient` and the QPS clients, `grpcutil.SendJSONResponse`,
+  `grpcutil.ErrorToHTTPCode`. Wire JSON keys are unchanged (issue 56).
+- `EventStore.Replay` returns `iter.Seq2[StoredEvent, error]` instead of a
+  slice. `ReplayAll` collects it. `MemoryEventStore` replays without copying,
+  and without holding its lock while the caller writes each event (issue 20).
+- `connectbridge` moved into the `hybrid` module, at
+  `servicekit/hybrid/connectbridge`. `NewConnectStreamBridge` takes any
+  `Sender[T]`, which v1's `*connect.ServerStream[T]` still satisfies
+  (issue 56).
+- `auth/` is deleted. goapplib and oneauth cover it (issue 56).
+- The root `go.mod` no longer requires gorm or Connect.
 
 ### Added
 - `servicekit/hybrid`, a separate module, serves one proto service over
@@ -21,7 +35,8 @@ and are not back-filled here.
   emits zero values and Connect and grpcws don't, so the same message came back
   in two shapes. `hybrid.Mux` mounts the gateway under a prefix so it can't
   swallow the other routes. `hybrid/demo` and `make -C hybrid exercise` show
-  it end to end (issue 50).
+  it end to end (issue 50). It's on Connect v2, `connectrpc.com/connect/v2`
+  (issue 55).
 
 ### Changed
 - `servicekit/http` and `middleware` no longer import grpc or protobuf. A

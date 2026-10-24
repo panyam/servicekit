@@ -22,7 +22,7 @@ func TestBaseConn_SendPingConcurrentWithDebugInfo(t *testing.T) {
 	}
 	wg.Wait()
 
-	if got := c.PingId.Load(); got != 1000 {
-		t.Errorf("PingId = %d, want 1000", got)
+	if got := c.PingID.Load(); got != 1000 {
+		t.Errorf("PingID = %d, want 1000", got)
 	}
 }
