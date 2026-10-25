@@ -5,13 +5,13 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.2.1] - 2026-10-24
 
 Connection metrics. Servers can now see how many WebSocket, SSE and grpcws
 connections are open, why each one closed (including clients dropped for
 not reading), and how many frames went each way, without hand-rolling it.
 The hooks have no metrics dependency, and `servicekit/prom` exports them to
-Prometheus (issues 11 and 13, mission 51).
+Prometheus (issues 11 and 13, PR 58).
 
 ### Added
 - `http.ConnObserver`, with `ConnInfo` and `CloseReason`. Set it on

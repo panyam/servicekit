@@ -1,7 +1,7 @@
 # ServiceKit
 
 ## Version
-0.2.0
+0.2.1
 
 ## Provides
 - websocket-infrastructure: Production-grade WebSocket connection management
