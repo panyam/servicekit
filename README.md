@@ -941,6 +941,27 @@ by `WriteTimeout` show up as `reason="write_timeout"` and grpcws streams closed
 by `CloseOnStreamEnd` as `reason="server_close"`. If you already use
 OpenTelemetry metrics, implement `ConnObserver` over your meter instead.
 
+## Webhook Signing
+
+`servicekit/http/webhooks` signs and verifies [Standard Webhooks](https://standardwebhooks.com/) deliveries. It only touches headers and bytes, so it works for any payload.
+
+```go
+secret := webhooks.GenerateSecret() // whsec_<base64 of 32 bytes>
+
+// Sender. Keep msgID stable across retries; receivers dedup on it.
+ts := webhooks.Timestamp(time.Now())
+req.Header.Set(webhooks.HeaderID, msgID)
+req.Header.Set(webhooks.HeaderTimestamp, ts)
+req.Header.Set(webhooks.HeaderSignature, webhooks.Sign(secret, msgID, ts, body))
+
+// Receiver. Verify checks only the HMAC, so check the timestamp too.
+id, ts, sig := r.Header.Get(webhooks.HeaderID), r.Header.Get(webhooks.HeaderTimestamp), r.Header.Get(webhooks.HeaderSignature)
+ok := webhooks.TimestampWithinTolerance(ts, time.Now(), webhooks.DefaultTolerance) &&
+	webhooks.Verify(secret, id, ts, body, sig)
+```
+
+Run `webhooks.ValidateSecret` on any secret a client hands you, so you never store one the receiver can't verify against.
+
 ## Upgrading
 
 See [UPGRADING.md](UPGRADING.md) for migration guides (e.g., JSONConn to typed BaseConn).
