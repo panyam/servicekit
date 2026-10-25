@@ -44,6 +44,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **Close reasons are settled when the read loop ends.** `WSHandleConn` defers `settleClose` before `OnClose`; anything noted after (a grpcws stream cancelled in `OnClose` calls `CloseAfterSend`) is ignored. A write failure or `CloseAfterSend` noted earlier outranks the loop's own reason. Writes that fail with `websocket.ErrCloseSent` record nothing: gorilla answers a client's close frame from inside `ReadMessage`, so every later write fails that way. Both races showed up only in `make exercise` (19 `write_error` and 1 extra `server_close` out of 300).
 - **macOS listen backlog is 128.** A test that dials a few hundred clients at once gets `connection reset by peer`. `loadtest.Dial` caps dials at 32; do the same in hand-rolled loops.
 - **Stuck-client tests need big frames** — loopback socket buffers absorbed 1.8M small frames (~70MB) without blocking. Use 256KB+ payloads (e.g. `wrapperspb.String`) so writes actually block.
+- **Secret scanning flags `http/webhooks` tests.** `webhooks_test.go` uses the Standard Webhooks spec's published `whsec_` test vector, which GitHub reports as a "Stripe Webhook Signing Secret" (alert 1). It's public, so dismiss such alerts as used in tests rather than changing the vector.
 
 ## Issues and missions
 

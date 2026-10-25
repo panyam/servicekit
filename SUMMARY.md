@@ -37,6 +37,10 @@ Both server and client use a two-layer architecture:
 
 ## Recent Changes (2026-10-24)
 
+### Standard Webhooks signing (`mcpkit#1578`, PR #59, v0.2.2)
+- `servicekit/http/webhooks`: `Sign`, `Verify`, `TimestampWithinTolerance`, `GenerateSecret`, `ValidateSecret` and the `webhook-*` header constants, stdlib only. Moved out of mcpkit's `experimental/ext/events`, which now wraps it (mcpkit v0.8.12)
+- The HMAC key is the base64-decoded bytes after `whsec_`, not the string. The spec's published vector is the first test, and a one-off run against the reference Go library agreed 400 of 400
+
 ### Connection metrics and load tests (Issues #11, #13, mission #51)
 - `http.ConnObserver`, set on `BaseConn`/`BaseSSEConn`, `WSConnConfig`/`SSEConnConfig`, or `grpcws.ConnOptions`, hears every open, close (with a `CloseReason`) and frame. No metrics dependency
 - `servicekit/prom`: `ConnMetrics` and `HTTPMetrics` (route-template labels, passes `Hijack` through)
@@ -194,6 +198,7 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/sseconn.go` | SSEConn[O] interface, BaseSSEConn[O], SSEServe handler factory |
 | `http/ssehub.go` | SSEHub[O] session manager (register/broadcast/close) |
 | `http/observer.go` | ConnObserver, ConnInfo, CloseReason |
+| `http/webhooks/` | Standard Webhooks v1 signing, verification, `whsec_` secrets |
 | `prom/` | Prometheus ConnMetrics and HTTPMetrics |
 | `internal/loadtest/` | WebSocket client pool for load tests and the exercise |
 | `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
