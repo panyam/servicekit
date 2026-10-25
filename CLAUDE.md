@@ -47,7 +47,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 
 ## Issues and missions
 
-Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.claude/skills/retriage/queue.sh` prints the queue. There are two active missions: #51 `mission_observable_relay` (relay metrics under load, exercise is `make exercise`) and #52 `mission_massrelay_eviction` (exercise is massrelay's `make test-interop`, pending panyam/massrelay#50). #53 `mission_lean_import` is done. A new issue gets one of `P0`–`P3` and either a mission link or `waiting` with its trigger.
+Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.claude/skills/retriage/queue.sh` prints the queue. No mission is active: #51 `mission_observable_relay` (metrics, v0.2.1), #52 `mission_massrelay_eviction` and #53 `mission_lean_import` are done. Run `/retriage` to pick the next one. `make exercise` stays in CI. A new issue gets one of `P0`–`P3` and either a mission link or `waiting` with its trigger.
 
 ## Project Docs
 
