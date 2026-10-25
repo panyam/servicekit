@@ -67,4 +67,4 @@ Work is ranked by mission (`~/.claude/skills/retriage/CONVENTIONS.md`); `~/.clau
 github.com/panyam/servicekit
 ```
 
-Packages: `http/` (+ `http/protocodec`, `http/grpcutil`), `grpcws/`, `middleware/`, `clients/typescript/`; separate module `hybrid/`
+Packages: `http/` (+ `http/protocodec`, `http/grpcutil`, `http/webhooks`), `grpcws/`, `middleware/`, `clients/typescript/`; separate module `hybrid/`

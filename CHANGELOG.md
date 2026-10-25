@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Added
+- `servicekit/http/webhooks` signs and verifies Standard Webhooks v1
+  deliveries: `Sign`, `Verify` (accepts any of several space-separated
+  signatures), `TimestampWithinTolerance`, `GenerateSecret` and
+  `ValidateSecret` for `whsec_` secrets. The HMAC key is the decoded secret, as
+  the spec says. It is standard library only, and matches the spec's test
+  vector and the reference Go library. It moved from mcpkit's
+  `experimental/ext/events` (`mcpkit#1578`).
+
 ## [v0.2.1] - 2026-10-24
 
 Connection metrics. Servers can now see how many WebSocket, SSE and grpcws

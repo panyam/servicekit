@@ -47,7 +47,8 @@ servicekit/
 │   ├── observer.go         # ConnObserver, ConnInfo, CloseReason (no metrics deps)
 │   ├── utils.go            # HTTP/WS utilities
 │   ├── protocodec/         # ProtoJSONCodec, BinaryProtoCodec (imports protobuf)
-│   └── grpcutil/           # gRPC-status → HTTP/WS error helpers (imports grpc)
+│   ├── grpcutil/           # gRPC-status → HTTP/WS error helpers (imports grpc)
+│   └── webhooks/           # Standard Webhooks signing and verification (stdlib only)
 │
 ├── grpcws/                  # gRPC-over-WebSocket
 │   ├── conn.go             # Shared types, GRPCWSCodec

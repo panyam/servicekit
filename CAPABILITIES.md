@@ -22,6 +22,7 @@
 - slow-client-eviction: per-write WriteTimeout on BaseConn and grpcws handlers drops clients that stop reading
 - connection-observer: http.ConnObserver is told when WebSocket, SSE and grpcws connections open and close (with a CloseReason such as write_timeout or server_close) and about every frame; no metrics dependency, so an app can implement it over OpenTelemetry
 - prometheus-metrics: servicekit/prom.ConnMetrics (a ConnObserver) and HTTPMetrics middleware export connection, message, close-reason and RED request metrics, labelled by mux route template
+- webhook-signing: servicekit/http/webhooks signs and verifies Standard Webhooks v1 deliveries (webhook-id/-timestamp/-signature, HMAC-SHA256 keyed on the decoded whsec_ secret), with replay-window checks and secret generation and validation
 - typescript-client: @panyam/servicekit-client npm package for browser WebSocket
 - trusted-proxy: IP extraction with trusted proxy support
 
