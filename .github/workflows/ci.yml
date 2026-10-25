@@ -26,6 +26,7 @@ jobs:
       - run: go vet ./...
       - run: scripts/check-deps.sh
       - run: go test -race ./...
+      - run: make exercise
 
   # hybrid/ is its own module (grpc-gateway, Connect), so the root job's
   # ./... skips it.

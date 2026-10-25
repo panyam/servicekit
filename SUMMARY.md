@@ -37,6 +37,11 @@ Both server and client use a two-layer architecture:
 
 ## Recent Changes (2026-10-24)
 
+### Connection metrics and load tests (Issues #11, #13, mission #51)
+- `http.ConnObserver`, set on `BaseConn`/`BaseSSEConn`, `WSConnConfig`/`SSEConnConfig`, or `grpcws.ConnOptions`, hears every open, close (with a `CloseReason`) and frame. No metrics dependency
+- `servicekit/prom`: `ConnMetrics` and `HTTPMetrics` (route-template labels, passes `Hijack` through)
+- `internal/loadtest` drives N clients, k of them never reading. `http/load_test.go`, `http/sse_load_test.go`, and `make exercise` (300 grpcws subscribers against `cmd/grpcws-demo`, checked against `/metrics`)
+
 ### Server-side close and slow clients (Issue #47, PR #48)
 - `grpcws.ConnOptions` (embedded in all three stream handlers): `CloseOnStreamEnd` sends a 1000 close frame after `stream_end`, `CloseGracePeriod` (default 2s) caps how long a stuck client holds the socket after that, `WriteTimeout` drops a client that stops reading mid-stream
 - `http.BaseConn.WriteTimeout` and `CloseAfterSend(code, reason, grace, last...)`. A failed write now closes the socket
@@ -188,10 +193,13 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/ws.go` | WSServe, WSConn interface, JSONConn alias |
 | `http/sseconn.go` | SSEConn[O] interface, BaseSSEConn[O], SSEServe handler factory |
 | `http/ssehub.go` | SSEHub[O] session manager (register/broadcast/close) |
+| `http/observer.go` | ConnObserver, ConnInfo, CloseReason |
+| `prom/` | Prometheus ConnMetrics and HTTPMetrics |
+| `internal/loadtest/` | WebSocket client pool for load tests and the exercise |
 | `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
 | `http/streamable.go` | StreamableServe for POST-that-optionally-streams (MCP 2025-03-26) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |
 | `hybrid/connectbridge/bridge.go` | ConnectStreamBridge[T] — Connect server stream (any `Sender[T]`) → gRPC ServerStreamingServer adapter |
 | `middleware/*.go` | HTTP/WebSocket middleware (Guard, rate limit, CORS, etc.) |
 | `clients/typescript/` | TypeScript client library with codec support and mock utilities |
-| `cmd/grpcws-demo/` | Multiplayer game demo with GameHub |
+| `cmd/grpcws-demo/` | Multiplayer game demo with GameHub, `/metrics`, and the `-exercise` driver |

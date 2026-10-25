@@ -44,6 +44,7 @@ servicekit/
 │   ├── ssehub.go           # SSEHub[O] session manager
 │   ├── graceful.go         # ListenAndServeGraceful shutdown helper
 │   ├── streamable.go       # StreamableServe (POST-that-optionally-streams)
+│   ├── observer.go         # ConnObserver, ConnInfo, CloseReason (no metrics deps)
 │   ├── utils.go            # HTTP/WS utilities
 │   ├── protocodec/         # ProtoJSONCodec, BinaryProtoCodec (imports protobuf)
 │   └── grpcutil/           # gRPC-status → HTTP/WS error helpers (imports grpc)
@@ -56,6 +57,10 @@ servicekit/
 │
 ├── middleware/               # HTTP middleware (Guard, rate limit, CORS, etc.)
 │
+├── prom/                    # Prometheus: ConnMetrics (a ConnObserver), HTTPMetrics
+│
+├── internal/loadtest/       # WebSocket client driver for load tests and the exercise
+│
 ├── hybrid/                  # Separate Go module: grpcws + grpc-gateway + Connect v2
 │   ├── hybrid.go           # ProtoJSON (one JSON config for all three), Mux
 │   ├── connectbridge/      # ConnectStreamBridge[T]: a Connect server stream (any
@@ -65,7 +70,7 @@ servicekit/
 │
 └── cmd/                     # Examples
     ├── timews/             # Basic WebSocket example
-    └── grpcws-demo/        # gRPC streaming demo
+    └── grpcws-demo/        # gRPC streaming demo, /metrics, `make exercise`
 ```
 
 ## Key Components
@@ -294,6 +299,7 @@ servicekit/middleware/
 type WSConnConfig struct {
     BiDirStreamConfig *BiDirStreamConfig
     Upgrader          websocket.Upgrader
+    Observer          ConnObserver // default for conns that set none
 }
 
 type BiDirStreamConfig struct {
@@ -311,3 +317,27 @@ type BiDirStreamConfig struct {
 5. **SSE Hub**: Use `SSEHub[O]` for session management, or build custom on top of `BaseSSEConn`
 6. **Streamable Handler**: Use `StreamableServe` for POST-that-optionally-streams endpoints
 7. **Stream Wrappers**: Implement stream interfaces for custom gRPC patterns
+8. **Connection metrics**: Implement `ConnObserver`, or use `prom.ConnMetrics`
+
+### Connection observer
+
+`http.ConnObserver` is how servicekit reports connections without importing a
+metrics library. `BaseConn` and `BaseSSEConn` call it: `ConnOpened` in
+`OnStart`, `MessageSent` from the Writer after each frame, `MessageReceived`
+after each decoded read, and `ConnClosed` once from `OnClose` with the
+lifetime and a `CloseReason`.
+
+The reason comes from two places. The Writer records `write_timeout` or
+`write_error` when a write fails, and `CloseAfterSend` records
+`server_close`. When the read loop ends, `WSHandleConn` settles the reason
+(`client_close` by default, or `pong_timeout`, `read_error`,
+`start_failed`), keeping a write failure or server close that was recorded
+earlier. Anything recorded after that is ignored, because tearing a
+connection down sets off more closes: cancelling a grpcws stream ends it,
+which calls `CloseAfterSend`. A write that fails with
+`websocket.ErrCloseSent` records nothing, since gorilla answers a client's
+close frame from inside `ReadMessage` and every later write fails that way.
+
+`servicekit/prom` implements it for Prometheus, and lives in the root module.
+`http/` and `middleware/` don't import it (`make check-deps` enforces this),
+so a server that doesn't use it links no Prometheus code.

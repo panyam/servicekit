@@ -190,9 +190,14 @@ type ConnOptions struct {
 	// stream is still producing is dropped once a write times out. Zero means
 	// no deadline.
 	WriteTimeout time.Duration
+
+	// Observer is told about every stream's connection, reported with
+	// Transport "grpcws" and Mode "server", "client" or "bidi". Without it,
+	// WSConnConfig.Observer still applies. See gohttp.ConnObserver.
+	Observer gohttp.ConnObserver
 }
 
-func (o ConnOptions) newBaseConn(codec gohttp.Codec[ControlMessage, ControlMessage], name string) baseGRPCConn {
+func (o ConnOptions) newBaseConn(codec gohttp.Codec[ControlMessage, ControlMessage], name, mode string) baseGRPCConn {
 	grace := o.CloseGracePeriod
 	if grace <= 0 {
 		grace = DefaultCloseGracePeriod
@@ -202,6 +207,8 @@ func (o ConnOptions) newBaseConn(codec gohttp.Codec[ControlMessage, ControlMessa
 			Codec:        codec,
 			NameStr:      name,
 			WriteTimeout: o.WriteTimeout,
+			Observer:     o.Observer,
+			Info:         gohttp.ConnInfo{Transport: "grpcws", Mode: mode},
 		},
 		closeOnStreamEnd: o.CloseOnStreamEnd,
 		closeGrace:       grace,

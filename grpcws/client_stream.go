@@ -136,7 +136,7 @@ func (h *ClientStreamHandler[Req, Resp, Stream]) Validate(
 	}
 
 	conn := &ClientStreamConn[Req, Resp, Stream]{
-		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ClientStreamConn"),
+		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "ClientStreamConn", "client"),
 		stream:       stream,
 		codec:        codec,
 	}

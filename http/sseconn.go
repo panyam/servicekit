@@ -27,6 +27,10 @@ type SSEConnConfig struct {
 	//
 	// See WHATWG SSE spec: https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream
 	KeepalivePeriod time.Duration
+
+	// Observer is given to every connection that embeds BaseSSEConn and has
+	// no Observer of its own. See ConnObserver.
+	Observer ConnObserver
 }
 
 // DefaultSSEConnConfig returns an SSEConnConfig with sensible defaults:
@@ -167,6 +171,17 @@ type BaseSSEConn[O any] struct {
 	// Auto-generated if not set.
 	ConnIDStr string
 
+	// Observer, if set, is told when this connection opens and closes and
+	// about every event it writes. SSEConnConfig.Observer fills it in when
+	// it is nil.
+	Observer ConnObserver
+
+	// Info is what the connection reports itself as to Observer. A zero
+	// Transport reports as "sse".
+	Info ConnInfo
+
+	stats connStats
+
 	// ready is closed when OnStart completes and the Writer is initialized.
 	// Initialized eagerly via initReady(). Use Ready() to wait.
 	ready     chan struct{}
@@ -218,54 +233,88 @@ func (b *BaseSSEConn[O]) OnStart(w http.ResponseWriter, r *http.Request) error {
 
 	b.initReady()
 	b.done = make(chan struct{})
+	b.stats.open(b.Observer, b.info())
 	b.Writer = conc.NewWriter(func(msg SSEOutgoingMessage[O]) error {
-		// Handle keepalive comments
-		if msg.Comment != "" {
-			fmt.Fprintf(w, ": %s\n\n", msg.Comment)
-			flusher.Flush()
-			return nil
+		kind, err := b.write(w, flusher, msg)
+		if err == nil && kind != "" && b.Observer != nil {
+			b.Observer.MessageSent(b.info(), kind)
 		}
-
-		// Handle bare retry hint (no data). Used by SendRetry to change the
-		// client's reconnection delay without delivering application data.
-		if msg.Data == nil && msg.Retry > 0 {
-			fmt.Fprintf(w, "retry: %d\n\n", msg.Retry)
-			flusher.Flush()
-			return nil
-		}
-
-		// Handle data messages
-		if msg.Data != nil {
-			data, _, err := b.Codec.Encode(*msg.Data)
-			if err != nil {
-				return err
-			}
-
-			if msg.Event != "" {
-				fmt.Fprintf(w, "event: %s\n", msg.Event)
-			}
-			if msg.ID != "" {
-				fmt.Fprintf(w, "id: %s\n", msg.ID)
-			}
-			// Retry is emitted before data so clients that parse
-			// field-by-field see the hint alongside the event payload.
-			// Per SSE spec, negative or zero values are dropped.
-			if msg.Retry > 0 {
-				fmt.Fprintf(w, "retry: %d\n", msg.Retry)
-			}
-
-			// Per SSE spec, multi-line data must be split into separate data: lines
-			for _, line := range bytes.Split(data, []byte("\n")) {
-				fmt.Fprintf(w, "data: %s\n", line)
-			}
-			fmt.Fprint(w, "\n") // blank line terminates the event
-			flusher.Flush()
-		}
-		return nil
+		return err
 	})
 
 	close(b.ready)
 	return nil
+}
+
+// write formats one message onto the stream and returns the kind it wrote
+// ("" if none).
+func (b *BaseSSEConn[O]) write(w http.ResponseWriter, flusher http.Flusher, msg SSEOutgoingMessage[O]) (string, error) {
+	// Handle keepalive comments
+	if msg.Comment != "" {
+		fmt.Fprintf(w, ": %s\n\n", msg.Comment)
+		flusher.Flush()
+		return "comment", nil
+	}
+
+	// Handle bare retry hint (no data). Used by SendRetry to change the
+	// client's reconnection delay without delivering application data.
+	if msg.Data == nil && msg.Retry > 0 {
+		fmt.Fprintf(w, "retry: %d\n\n", msg.Retry)
+		flusher.Flush()
+		return "retry", nil
+	}
+
+	// Handle data messages
+	if msg.Data != nil {
+		data, _, err := b.Codec.Encode(*msg.Data)
+		if err != nil {
+			return "", err
+		}
+
+		if msg.Event != "" {
+			fmt.Fprintf(w, "event: %s\n", msg.Event)
+		}
+		if msg.ID != "" {
+			fmt.Fprintf(w, "id: %s\n", msg.ID)
+		}
+		// Retry is emitted before data so clients that parse
+		// field-by-field see the hint alongside the event payload.
+		// Per SSE spec, negative or zero values are dropped.
+		if msg.Retry > 0 {
+			fmt.Fprintf(w, "retry: %d\n", msg.Retry)
+		}
+
+		// Per SSE spec, multi-line data must be split into separate data: lines
+		for _, line := range bytes.Split(data, []byte("\n")) {
+			fmt.Fprintf(w, "data: %s\n", line)
+		}
+		fmt.Fprint(w, "\n") // blank line terminates the event
+		flusher.Flush()
+		return "data", nil
+	}
+	return "", nil
+}
+
+func (b *BaseSSEConn[O]) info() ConnInfo {
+	info := b.Info
+	if info.Transport == "" {
+		info.Transport = "sse"
+	}
+	return info
+}
+
+func (b *BaseSSEConn[O]) settleCloseReason(r CloseReason) { b.stats.settle(r) }
+
+func (b *BaseSSEConn[O]) defaultObserver(o ConnObserver) {
+	if b.Observer == nil {
+		b.Observer = o
+	}
+}
+
+// reportClosed tells the observer about a connection whose OnStart failed
+// after BaseSSEConn.OnStart ran. SSEServe does not call OnClose for those.
+func (b *BaseSSEConn[O]) reportClosed() {
+	b.stats.close(b.Observer, b.info(), CloseStartFailed)
 }
 
 // initReady ensures the ready channel is created exactly once.
@@ -302,6 +351,7 @@ func (b *BaseSSEConn[O]) OnClose() {
 			close(b.done)
 		}
 	})
+	b.stats.close(b.Observer, b.info(), CloseClient)
 	log.Printf("Closed %s SSE connection: %s", b.Name(), b.ConnID())
 }
 
@@ -376,6 +426,7 @@ func (b *BaseSSEConn[O]) Done() <-chan struct{} {
 // Close signals the connection to terminate. SSEServe will detect this via
 // the Done channel and call OnClose.
 func (b *BaseSSEConn[O]) Close() {
+	b.stats.noteReason(CloseServer)
 	b.doneOnce.Do(func() {
 		if b.done != nil {
 			close(b.done)
@@ -452,7 +503,13 @@ func SSEServe[O any, S SSEConn[O]](handler SSEHandler[O, S], config *SSEConnConf
 		// Disable proxy buffering (nginx, Varnish, etc.)
 		w.Header().Set("X-Accel-Buffering", "no")
 
+		if d, ok := any(conn).(observerDefaulter); ok && config.Observer != nil {
+			d.defaultObserver(config.Observer)
+		}
 		if err := conn.OnStart(w, r); err != nil {
+			if c, ok := any(conn).(interface{ reportClosed() }); ok {
+				c.reportClosed()
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -474,8 +531,10 @@ func SSEServe[O any, S SSEConn[O]](handler SSEHandler[O, S], config *SSEConnConf
 		for {
 			select {
 			case <-r.Context().Done():
+				settleClose(conn, CloseClient)
 				return
 			case <-conn.Done():
+				settleClose(conn, CloseServer)
 				return
 			case <-keepaliveC:
 				conn.SendKeepalive()

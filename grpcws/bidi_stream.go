@@ -165,7 +165,7 @@ func (h *BidiStreamHandler[Req, Resp, Stream]) Validate(
 	}
 
 	conn := &BidiStreamConn[Req, Resp, Stream]{
-		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "BidiStreamConn"),
+		baseGRPCConn: h.ConnOptions.newBaseConn(codec, "BidiStreamConn", "bidi"),
 		stream:       stream,
 		codec:        codec,
 	}

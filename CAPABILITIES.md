@@ -20,6 +20,8 @@
 - connection-lifecycle: OnStart, HandleMessage, OnClose hooks with heartbeat/ping-pong
 - server-initiated-close: BaseConn.CloseAfterSend and grpcws ConnOptions.CloseOnStreamEnd end a socket from the server, with a hard-close grace period for stuck clients
 - slow-client-eviction: per-write WriteTimeout on BaseConn and grpcws handlers drops clients that stop reading
+- connection-observer: http.ConnObserver is told when WebSocket, SSE and grpcws connections open and close (with a CloseReason such as write_timeout or server_close) and about every frame; no metrics dependency, so an app can implement it over OpenTelemetry
+- prometheus-metrics: servicekit/prom.ConnMetrics (a ConnObserver) and HTTPMetrics middleware export connection, message, close-reason and RED request metrics, labelled by mux route template
 - typescript-client: @panyam/servicekit-client npm package for browser WebSocket
 - trusted-proxy: IP extraction with trusted proxy support
 
