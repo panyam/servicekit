@@ -78,7 +78,7 @@ Added `SSEConn[O]` and `SSEHub[O]` for server-sent events:
 
 ### Graceful Shutdown (Issue #7)
 - **`ListenAndServeGraceful`**: Signal-aware HTTP server lifecycle with functional options
-- `WithDrainTimeout`, `WithOnShutdown`, `WithSignals`, `WithContext`
+- `WithDrainTimeout`, `WithOnShutdown`, `WithSignals`, `WithContext`, `WithListener`, `WithTLS`, `WithTLSConfig`
 - OnShutdown callbacks run before drain (SSEHub.CloseAll, goodbye messages, etc.)
 - WS connections drain automatically; SSE needs explicit hub close
 
@@ -201,6 +201,7 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 | `http/webhooks/` | Standard Webhooks v1 signing, verification, `whsec_` secrets |
 | `prom/` | Prometheus ConnMetrics and HTTPMetrics |
 | `internal/loadtest/` | WebSocket client pool for load tests and the exercise |
+| `internal/testcert/` | Self-signed certificate for TLS tests in `http/` and `grpcws/` |
 | `http/graceful.go` | ListenAndServeGraceful with signal handling and drain timeout |
 | `http/streamable.go` | StreamableServe for POST-that-optionally-streams (MCP 2025-03-26) |
 | `grpcws/*.go` | gRPC streaming over WebSocket |

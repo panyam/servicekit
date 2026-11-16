@@ -888,10 +888,22 @@ err := gohttp.ListenAndServeGraceful(srv,
 - `WithSignals(sigs...)` — OS signals to catch (default SIGTERM, SIGINT)
 - `WithContext(ctx)` — parent context; shutdown on cancellation
 - `WithCancelRequests(bool)` — cancel every `r.Context()` once shutdown starts (default true)
+- `WithListener(ln)` — serve on a listener you already bound (port `:0`, no start-up race)
+- `WithTLS(certFile, keyFile)` / `WithTLSConfig(cfg)` — serve HTTPS, with HTTP/2 and HTTP/1.1 negotiated by ALPN
 
 OnShutdown callbacks run **before** `srv.Shutdown()` so they can send goodbye events while connections are still open.
 
 Right after the callbacks, request contexts are cancelled, so handlers waiting on `r.Context().Done()` (streams, long-polls) return and the drain finishes quickly. Pass `WithCancelRequests(false)` if in-flight requests should keep their context until the drain timeout. If the drain times out, the remaining connections are closed and `ErrDrainTimeout` is returned. Signal handling stops as soon as shutdown begins, so a second Ctrl-C kills the process.
+
+To serve TLS, pass `WithTLS` or `WithTLSConfig`. The helper calls `srv.ServeTLS`, which offers `h2` and `http/1.1` through ALPN, so gRPC clients and browsers share one port:
+
+```go
+err := gohttp.ListenAndServeGraceful(srv,
+    gohttp.WithTLS("server.crt", "server.key"),
+)
+```
+
+Use `WithTLSConfig` for `GetCertificate` (rotation, autocert) or client certificates. Pass one of the two; both together return `ErrTLSOptionsConflict`. Don't wrap the listener in `tls.NewListener` yourself. Alone, that route negotiates only HTTP/1.1, and gRPC clients fail the handshake. Combined with a TLS option, the server stops on the first connection with `ErrListenerAlreadyTLS`.
 
 ## Streamable HTTP
 

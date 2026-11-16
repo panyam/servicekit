@@ -14,7 +14,7 @@
 - server-timeouts: ApplyDefaults helper for sensible http.Server timeout defaults
 - sse-connection: SSEConn[O] for server-sent event connections with keepalive and codec support
 - sse-hub: SSEHub[O] generic session manager for SSE connections with register/broadcast/close
-- graceful-shutdown: ListenAndServeGraceful with signal handling, drain timeout, and OnShutdown callbacks
+- graceful-shutdown: ListenAndServeGraceful with signal handling, drain timeout, OnShutdown callbacks, and TLS (WithTLS/WithTLSConfig, h2 + http/1.1 via ALPN)
 - streamable-http: StreamableServe for POST-that-optionally-streams pattern (MCP 2025-03-26 Streamable HTTP)
 - jsonrpc-conn: RPCConn — bidirectional JSON-RPC 2.0 over Content-Length framed streams (LSP / MCP-stdio); Call/Notify with id correlation + a peer-request handler, so stdio JSON-RPC clients need not re-implement it
 - connection-lifecycle: OnStart, HandleMessage, OnClose hooks with heartbeat/ping-pong

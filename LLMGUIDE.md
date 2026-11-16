@@ -383,12 +383,15 @@ func main() {
     err := gohttp.ListenAndServeGraceful(srv,
         gohttp.WithDrainTimeout(10*time.Second),
         gohttp.WithOnShutdown(hub.CloseAll),  // close SSE connections first
+        // gohttp.WithTLS("server.crt", "server.key"), // HTTPS, h2 + http/1.1 via ALPN
     )
     if err != nil {
         log.Fatal(err)
     }
 }
 ```
+
+For TLS use `WithTLS(certFile, keyFile)` or `WithTLSConfig(cfg)`, never `tls.NewListener` + `WithListener`. The helper calls `srv.ServeTLS`, which sets ALPN; a hand-wrapped listener offers no `h2`, so gRPC clients fail the handshake.
 
 ### Template 9: Streamable HTTP (POST-that-optionally-streams)
 
