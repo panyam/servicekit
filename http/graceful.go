@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -35,6 +36,10 @@ type gracefulConfig struct {
 	ctx            context.Context
 	listener       net.Listener
 	cancelRequests bool
+
+	useTLS            bool
+	certFile, keyFile string
+	tlsConfig         *tls.Config
 }
 
 func defaultGracefulConfig() *gracefulConfig {
@@ -106,6 +111,47 @@ func WithListener(ln net.Listener) GracefulOption {
 	}
 }
 
+// WithTLS serves HTTPS, loading the certificate and key from PEM files.
+// Clients negotiate HTTP/2 or HTTP/1.1 through ALPN, so gRPC clients and
+// browsers both work on the same port. The helper calls srv.ServeTLS (or
+// srv.ListenAndServeTLS without WithListener), and that adds "h2" and
+// "http/1.1" to NextProtos for whichever of them srv.Protocols enables. Both
+// are on when srv.Protocols is nil.
+//
+// The files load when serving starts. A missing or bad file is returned as a
+// startup error.
+//
+// It combines with WithListener. Pass a plain TCP listener; the helper does
+// the TLS handshake itself, so a listener from tls.NewListener would be
+// wrapped twice. If srv.TLSConfig is set, its other settings (MinVersion,
+// ClientAuth and so on) apply, and these files replace its Certificates.
+//
+// Cleartext HTTP/2 (srv.Protocols with SetUnencryptedHTTP2) is not served on a
+// TLS listener. Run a second server for it if you need both.
+func WithTLS(certFile, keyFile string) GracefulOption {
+	return func(c *gracefulConfig) {
+		c.useTLS = true
+		c.certFile, c.keyFile = certFile, keyFile
+	}
+}
+
+// WithTLSConfig serves HTTPS using cfg, which must supply a certificate
+// through Certificates or GetCertificate. Use it instead of WithTLS to rotate
+// certificates, use autocert, or require client certificates.
+//
+// The helper sets srv.TLSConfig to a clone of cfg, so later changes to cfg have
+// no effect and cfg itself is never modified. A nil cfg serves TLS with
+// whatever srv.TLSConfig already holds. ALPN, WithListener and cleartext
+// HTTP/2 behave as described on WithTLS. Pick one of the two options. With
+// both, the files replace cfg.Certificates, and a GetCertificate in cfg still
+// runs first.
+func WithTLSConfig(cfg *tls.Config) GracefulOption {
+	return func(c *gracefulConfig) {
+		c.useTLS = true
+		c.tlsConfig = cfg
+	}
+}
+
 // WithCancelRequests controls whether request contexts are cancelled when
 // shutdown starts. Default: true.
 //
@@ -146,10 +192,12 @@ func WithContext(ctx context.Context) GracefulOption {
 //
 // By default it binds srv.Addr itself. Pass WithListener to serve on a
 // listener you have already bound, which removes the start-up race for
-// callers that run this in a goroutine.
+// callers that run this in a goroutine. Pass WithTLS or WithTLSConfig to
+// serve HTTPS, with HTTP/2 and HTTP/1.1 negotiated by ALPN.
 //
 // Shutdown lifecycle:
-//  1. Start srv.ListenAndServe() — or srv.Serve(ln) with WithListener — in a goroutine
+//  1. Start srv.ListenAndServe() in a goroutine. WithListener switches it to
+//     srv.Serve(ln), and WithTLS or WithTLSConfig to the TLS form of either.
 //  2. Block until: OS signal, parent context cancellation, or server error
 //  3. Stop catching signals, so a second Ctrl-C kills the process
 //  4. Call OnShutdown callbacks (e.g. SSEHub.CloseAll()) — connections still open
@@ -178,6 +226,10 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 		o(cfg)
 	}
 
+	if cfg.tlsConfig != nil {
+		srv.TLSConfig = cfg.tlsConfig.Clone()
+	}
+
 	cancelRequests := func() {}
 	if cfg.cancelRequests {
 		cancelRequests = wrapBaseContext(srv)
@@ -189,9 +241,14 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 		// A caller-supplied listener is already bound, so Serve skips the
 		// bind entirely — see WithListener.
 		var err error
-		if cfg.listener != nil {
+		switch {
+		case cfg.listener != nil && cfg.useTLS:
+			err = srv.ServeTLS(cfg.listener, cfg.certFile, cfg.keyFile)
+		case cfg.listener != nil:
 			err = srv.Serve(cfg.listener)
-		} else {
+		case cfg.useTLS:
+			err = srv.ListenAndServeTLS(cfg.certFile, cfg.keyFile)
+		default:
 			err = srv.ListenAndServe()
 		}
 		if err != nil && err != http.ErrServerClosed {

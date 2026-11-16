@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Added
+- `WithTLS(certFile, keyFile)` and `WithTLSConfig(*tls.Config)` options for
+  `ListenAndServeGraceful`. They serve HTTPS through `srv.ServeTLS`, so ALPN
+  offers `h2` and `http/1.1` and gRPC clients reach the server over TLS.
+  Wrapping a listener in `tls.NewListener` and passing it with `WithListener`
+  negotiated only HTTP/1.1, and grpc-go failed the handshake on the missing
+  ALPN. Graceful drain works the same over TLS (issue 60).
+
 ## [v0.2.2] - 2026-10-24
 
 ### Added
