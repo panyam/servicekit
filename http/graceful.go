@@ -26,6 +26,20 @@ import (
 // so on) are returned as they are and never match ErrDrainTimeout.
 var ErrDrainTimeout = fmt.Errorf("servicekit/http: drain timeout exceeded, remaining connections closed: %w", context.DeadlineExceeded)
 
+// ErrTLSOptionsConflict is returned by ListenAndServeGraceful, before it
+// binds or serves, when both WithTLS and WithTLSConfig are passed. Pick one.
+// To use cert files with other TLS settings, set those settings on
+// srv.TLSConfig and pass WithTLS.
+var ErrTLSOptionsConflict = errors.New("servicekit/http: WithTLS and WithTLSConfig are mutually exclusive")
+
+// ErrListenerAlreadyTLS is returned by ListenAndServeGraceful when WithTLS or
+// WithTLSConfig is combined with a WithListener listener that already does
+// TLS, such as one from tls.NewListener. The helper would run a second
+// handshake inside the first, and every client would fail. The check runs on
+// each accepted connection, so the server stops on the first client to
+// connect, and that connection is closed. Pass the plain TCP listener instead.
+var ErrListenerAlreadyTLS = errors.New("servicekit/http: listener already does TLS; pass a plain TCP listener with WithTLS or WithTLSConfig")
+
 // GracefulOption configures ListenAndServeGraceful behavior.
 type GracefulOption func(*gracefulConfig)
 
@@ -38,7 +52,9 @@ type gracefulConfig struct {
 	cancelRequests bool
 
 	useTLS            bool
+	tlsFiles          bool
 	certFile, keyFile string
+	tlsConfigSet      bool
 	tlsConfig         *tls.Config
 }
 
@@ -121,16 +137,17 @@ func WithListener(ln net.Listener) GracefulOption {
 // The files load when serving starts. A missing or bad file is returned as a
 // startup error.
 //
-// It combines with WithListener. Pass a plain TCP listener; the helper does
-// the TLS handshake itself, so a listener from tls.NewListener would be
-// wrapped twice. If srv.TLSConfig is set, its other settings (MinVersion,
+// It combines with WithListener. Pass a plain TCP listener, since the helper
+// does the TLS handshake itself. A listener that already does TLS, such as one
+// from tls.NewListener, stops the server with ErrListenerAlreadyTLS on the
+// first connection. If srv.TLSConfig is set, its other settings (MinVersion,
 // ClientAuth and so on) apply, and these files replace its Certificates.
 //
 // Cleartext HTTP/2 (srv.Protocols with SetUnencryptedHTTP2) is not served on a
 // TLS listener. Run a second server for it if you need both.
 func WithTLS(certFile, keyFile string) GracefulOption {
 	return func(c *gracefulConfig) {
-		c.useTLS = true
+		c.useTLS, c.tlsFiles = true, true
 		c.certFile, c.keyFile = certFile, keyFile
 	}
 }
@@ -142,12 +159,11 @@ func WithTLS(certFile, keyFile string) GracefulOption {
 // The helper sets srv.TLSConfig to a clone of cfg, so later changes to cfg have
 // no effect and cfg itself is never modified. A nil cfg serves TLS with
 // whatever srv.TLSConfig already holds. ALPN, WithListener and cleartext
-// HTTP/2 behave as described on WithTLS. Pick one of the two options. With
-// both, the files replace cfg.Certificates, and a GetCertificate in cfg still
-// runs first.
+// HTTP/2 behave as described on WithTLS. Passing both WithTLS and
+// WithTLSConfig returns ErrTLSOptionsConflict.
 func WithTLSConfig(cfg *tls.Config) GracefulOption {
 	return func(c *gracefulConfig) {
-		c.useTLS = true
+		c.useTLS, c.tlsConfigSet = true, true
 		c.tlsConfig = cfg
 	}
 }
@@ -226,6 +242,9 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 		o(cfg)
 	}
 
+	if cfg.tlsFiles && cfg.tlsConfigSet {
+		return ErrTLSOptionsConflict
+	}
 	if cfg.tlsConfig != nil {
 		srv.TLSConfig = cfg.tlsConfig.Clone()
 	}
@@ -243,7 +262,7 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 		var err error
 		switch {
 		case cfg.listener != nil && cfg.useTLS:
-			err = srv.ServeTLS(cfg.listener, cfg.certFile, cfg.keyFile)
+			err = srv.ServeTLS(plainOnlyListener{cfg.listener}, cfg.certFile, cfg.keyFile)
 		case cfg.listener != nil:
 			err = srv.Serve(cfg.listener)
 		case cfg.useTLS:
@@ -302,6 +321,23 @@ func ListenAndServeGraceful(srv *http.Server, opts ...GracefulOption) error {
 
 	log.Println("Server shut down gracefully")
 	return nil
+}
+
+// plainOnlyListener refuses connections that are already TLS, so ServeTLS
+// never runs a second handshake inside the first. Without it, the client sees
+// "400 Client sent an HTTP request to an HTTPS server" on every request.
+type plainOnlyListener struct{ net.Listener }
+
+func (l plainOnlyListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := c.(*tls.Conn); ok {
+		c.Close()
+		return nil, ErrListenerAlreadyTLS
+	}
+	return c, nil
 }
 
 // wrapBaseContext makes every request context on srv cancellable by the

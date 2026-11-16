@@ -14,6 +14,10 @@ and are not back-filled here.
   Wrapping a listener in `tls.NewListener` and passing it with `WithListener`
   negotiated only HTTP/1.1, and grpc-go failed the handshake on the missing
   ALPN. Graceful drain works the same over TLS (issue 60).
+- `ErrTLSOptionsConflict`, returned before serving when both TLS options are
+  passed, and `ErrListenerAlreadyTLS`, returned when a `WithListener`
+  listener already does TLS. Without that check, every client got
+  `400 Client sent an HTTP request to an HTTPS server`.
 
 ## [v0.2.2] - 2026-10-24
 

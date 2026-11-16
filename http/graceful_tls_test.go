@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -201,5 +202,67 @@ func TestGracefulTLS_BadCertFileFailsStartup(t *testing.T) {
 	err = ListenAndServeGraceful(srv, WithListener(ln), WithTLS("/nonexistent/cert.pem", "/nonexistent/key.pem"))
 	if err == nil {
 		t.Fatal("expected a startup error for a missing certificate file")
+	}
+}
+
+func TestGracefulTLS_BothOptionsRejected(t *testing.T) {
+	c := testcert.New(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer ln.Close()
+	srv := &http.Server{Handler: protoHandler}
+	cfg := &tls.Config{Certificates: []tls.Certificate{c.Pair}}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- ListenAndServeGraceful(srv, WithListener(ln), WithTLS(c.CertFile, c.KeyFile), WithTLSConfig(cfg))
+	}()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrTLSOptionsConflict) {
+			t.Errorf("err = %v, want ErrTLSOptionsConflict", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ListenAndServeGraceful served instead of rejecting both TLS options")
+	}
+	if srv.TLSConfig != nil {
+		t.Error("srv.TLSConfig was set although the options were rejected")
+	}
+}
+
+// A listener from tls.NewListener passed with WithTLS would do the handshake
+// twice. The first connection stops the server with ErrListenerAlreadyTLS.
+func TestGracefulTLS_AlreadyTLSListenerRejected(t *testing.T) {
+	c := testcert.New(t)
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer raw.Close()
+	ln := tls.NewListener(raw, &tls.Config{Certificates: []tls.Certificate{c.Pair}})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- ListenAndServeGraceful(&http.Server{Handler: protoHandler},
+			WithListener(ln), WithTLS(c.CertFile, c.KeyFile), WithContext(ctx))
+	}()
+
+	if resp, err := h2Client(c).Get("https://" + raw.Addr().String()); err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Error("request succeeded through a doubly wrapped TLS listener")
+		}
+	}
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrListenerAlreadyTLS) {
+			t.Errorf("err = %v, want ErrListenerAlreadyTLS", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server kept running on a listener that already does TLS")
 	}
 }

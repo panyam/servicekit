@@ -903,7 +903,7 @@ err := gohttp.ListenAndServeGraceful(srv,
 )
 ```
 
-Use `WithTLSConfig` for `GetCertificate` (rotation, autocert) or client certificates. Don't wrap the listener in `tls.NewListener` yourself. That route negotiates only HTTP/1.1, and gRPC clients fail the handshake.
+Use `WithTLSConfig` for `GetCertificate` (rotation, autocert) or client certificates. Pass one of the two; both together return `ErrTLSOptionsConflict`. Don't wrap the listener in `tls.NewListener` yourself. Alone, that route negotiates only HTTP/1.1, and gRPC clients fail the handshake. Combined with a TLS option, the server stops on the first connection with `ErrListenerAlreadyTLS`.
 
 ## Streamable HTTP
 
