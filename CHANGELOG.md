@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [Unreleased]
+
+### Added
+- `servicekit/http/webhooks` signs and verifies the Standard Webhooks
+  asymmetric ed25519 schemes. `SignV2a` and `VerifyV2a` implement `v2a`,
+  which signs SHA-256 of `endpoint_id.msg_id.timestamp.payload`, so one key
+  pair can serve every endpoint and a KMS signer only sees the 32-byte
+  digest. `SignV1a` and `VerifyV1a` implement `v1a`, which standard-webhooks
+  PR 372 deprecated on 2026-11-18. MCP's SEP-3415 still names `v1a`. Signers
+  take a `crypto.Signer`, and verifiers take a list of trusted keys for
+  rotation. `GenerateKeyPair`, `ParsePrivateKey`, `ParsePublicKey`,
+  `EncodePrivateKey` and `EncodePublicKey` handle `whsk_` and `whpk_` keys.
+  The `v2a` code matches the spec's test vector (`mcpkit#1437`).
+
 ## [v0.2.3] - 2026-11-16
 
 ### Added
