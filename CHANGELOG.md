@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
-## [Unreleased]
+## [v0.2.4] - 2026-11-20
 
 ### Added
 - `servicekit/http/webhooks` signs and verifies the Standard Webhooks
