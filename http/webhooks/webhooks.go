@@ -1,7 +1,9 @@
 // Package webhooks signs and verifies HTTP webhook deliveries in the Standard
-// Webhooks v1 format (https://standardwebhooks.com/): the webhook-id,
+// Webhooks format (https://standardwebhooks.com/): the webhook-id,
 // webhook-timestamp and webhook-signature headers, an HMAC-SHA256 over
-// id + "." + timestamp + "." + body, and whsec_ secrets.
+// id + "." + timestamp + "." + body, and whsec_ secrets. It also signs and
+// verifies the asymmetric ed25519 schemes, v2a and the deprecated v1a, with
+// whsk_ and whpk_ keys (asymmetric.go).
 //
 // It knows nothing about what is being delivered. Callers build the body, pick
 // the message id (the receiver dedups on it, so keep it stable across retries
