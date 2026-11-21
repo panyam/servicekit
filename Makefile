@@ -1,4 +1,4 @@
-.PHONY: test test-race vet check-deps exercise cover cover-html cover-func testall install-hooks
+.PHONY: test test-race vet check-deps vulncheck exercise cover cover-html cover-func testall install-hooks
 
 REPORT_DIR := test-reports
 
@@ -15,6 +15,11 @@ vet:
 # JSON-only packages must not pull in grpc/protobuf/connect/gorm (issue 17).
 check-deps:
 	scripts/check-deps.sh
+
+# Scans the root module and hybrid/ with govulncheck, failing if either fails (panyam/ci-actions#11).
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+	cd hybrid && go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
 # The observable_relay mission's exercise (issue 51): 300 grpcws subscribers,
 # 10 that never read, checked against /metrics.
