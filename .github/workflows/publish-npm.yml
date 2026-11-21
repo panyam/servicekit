@@ -22,17 +22,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: clients/typescript/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: scripts/check-versions.sh "$GITHUB_REF_NAME"
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
         working-directory: clients/typescript
-      - run: npm test
+      - run: pnpm test
         working-directory: clients/typescript
 
   publish:
     needs: test
-    uses: ./.github/workflows/npm-publish.yml
+    uses: panyam/ci-actions/.github/workflows/npm-publish.yml@v0.1.1
     with:
       working-directory: clients/typescript
+      package-manager: pnpm

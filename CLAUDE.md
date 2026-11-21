@@ -25,7 +25,9 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **Nil-safe middleware** — all middleware components are no-ops when nil.
 - **Transport/codec separation** — pings/errors are always JSON at transport layer, regardless of data codec.
 - **No real gRPC server for tests** — grpcws integration tests use channel-driven test doubles satisfying the stream interfaces. No protobuf codegen needed.
-- **One version for Go and TS** — the Go module and `@panyam/servicekit-client` share the version under `## Version` in CAPABILITIES.md. A release bumps it there and in `clients/typescript/package.json` (and its lock); `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` publishes the client at X.Y.Z through `publish-npm.yml`, which calls the shared `npm-publish.yml` (npm trusted publishing, no token). Other repos call that shared workflow too.
+- **One version for Go and TS** — the Go module and `@panyam/servicekit-client` share the version under `## Version` in CAPABILITIES.md. A release bumps it there and in `clients/typescript/package.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` publishes the client at X.Y.Z through `publish-npm.yml`, which calls `panyam/ci-actions`' `npm-publish.yml` (npm trusted publishing, no token).
+- **The TS client uses pnpm.** Run `pnpm install --frozen-lockfile`, `pnpm run build` and `pnpm test` in `clients/typescript`. pnpm 12 runs esbuild's install script only because `pnpm-workspace.yaml` there allows it.
+- **This repo's `npm-publish.yml` is a leftover copy.** notations and galore still call it at `@master`, so keep it until they move to `panyam/ci-actions`.
 
 ## Modules
 

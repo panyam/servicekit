@@ -52,11 +52,15 @@ jobs:
         working-directory: clients/typescript
     steps:
       - uses: actions/checkout@v4
+      # pnpm's version comes from packageManager in clients/typescript/package.json.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: clients/typescript/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci
-      - run: npx tsc --noEmit
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
       # test/exports.test.mjs resolves the package's entry points, which name files in dist.
-      - run: npm run build
-      - run: npm test
+      - run: pnpm run build
+      - run: pnpm test
