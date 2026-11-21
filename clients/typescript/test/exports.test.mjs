@@ -8,14 +8,14 @@ import { pathToFileURL } from 'node:url';
 
 // These tests resolve the package by its name, as a consumer does, so they
 // read package.json's entry points rather than the source (issue 46). They
-// need `npm run build` first, since the entry points name files in dist.
+// need `pnpm run build` first, since the entry points name files in dist.
 
 const pkgRoot = resolve(import.meta.dirname, '..');
 let consumer;
 
 beforeAll(() => {
   for (const f of ['dist/index.mjs', 'dist/index.js', 'dist/servicekit-client.browser.js']) {
-    if (!existsSync(join(pkgRoot, f))) throw new Error(`${f} is missing; run npm run build first`);
+    if (!existsSync(join(pkgRoot, f))) throw new Error(`${f} is missing; run pnpm run build first`);
   }
   consumer = mkdtempSync(join(tmpdir(), 'servicekit-client-'));
   mkdirSync(join(consumer, 'node_modules', '@panyam'), { recursive: true });
