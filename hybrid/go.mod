@@ -2,6 +2,8 @@ module github.com/panyam/servicekit/hybrid
 
 go 1.26.0
 
+toolchain go1.27.4
+
 require (
 	connectrpc.com/connect/v2 v2.0.2
 	github.com/gorilla/websocket v1.5.3
