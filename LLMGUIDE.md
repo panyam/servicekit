@@ -450,7 +450,7 @@ m.Handle("GET /ws/v1/games/{game_id}/watch", gohttp.WSServe(watch, nil))
 http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 ```
 
-The full example is `hybrid/demo`, and `make -C hybrid exercise` checks that all three return the same JSON.
+The full example is `hybrid/demo`. `make -C hybrid exercise` checks that gateway JSON, Connect, gRPC-Web and grpcws return the same JSON, over cleartext and again over TLS.
 
 ### Template 11: Prometheus Metrics for Connections and Requests
 

@@ -55,5 +55,5 @@ http.ListenAndServe(":8080", m.Handler(middleware.NewRequestID().Middleware))
 | Target | What it does |
 |---|---|
 | `make test` | unit tests plus the demo's interop tests |
-| `make exercise` | runs `cmd/demo -check`: fetch one game three ways, print, exit 1 if they differ |
+| `make exercise` | runs `cmd/demo -check`, then `-check -tls`: fetch one game over gateway JSON, Connect, gRPC-Web and grpcws, print, exit 1 if they differ. `-tls` serves through `gohttp.WithTLS` with a throwaway self-signed cert, so gRPC-Web runs over HTTP/2 |
 | `make gen` | regenerate `demo/gen` with buf (remote plugins, Connect pinned to v2.0.2) |
