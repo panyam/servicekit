@@ -5,6 +5,40 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [v0.2.5] - 2026-11-22
+
+### Added
+- `middleware.TrustedProxies` answers two questions behind a proxy that ends
+  TLS: who the client is (`ClientIP`) and whether it used HTTPS (`IsHTTPS`,
+  from the first `X-Forwarded-Proto`, or `Forwarded` `proto=`). Forwarding
+  headers count only when the TCP peer is a listed proxy, and an empty list
+  trusts nobody. `ParseTrustedProxies` takes CIDRs and bare addresses and
+  returns an error on a bad entry. It mirrors oneauth's `core.TrustedProxies`
+  (issue 67, PR 68).
+- `middleware.CheckPlaintext(addr, tls, proxies)` is a startup check for
+  services that accept credentials. It refuses plain HTTP on a non-loopback
+  address unless TLS is on or trusted proxies are named.
+- `middleware.SetDefaultTrustedProxies` points the package-level `ClientIP`
+  (used by RequestLogger, ConnLimiter, Recovery, OriginChecker and the default
+  rate-limit key) at a `TrustedProxies`.
+- `make -C hybrid exercise` runs again over TLS through `gohttp.WithTLS`, and
+  both runs add a gRPC-Web client, which uses HTTP/2 over TLS (issue 61, PR 70).
+
+### Changed
+- `ClientIPExtractor` now wraps `TrustedProxies`. With named proxies it walks
+  `X-Forwarded-For` right to left and skips trusted hops. Before, it returned
+  the leftmost entry, which the client writes, so a client behind a trusted
+  proxy could choose its own rate-limit key. With every hop trusted, the
+  leftmost entry still wins.
+- Deprecated: an empty `NewClientIPExtractor` / `SetTrustedProxies` list,
+  and the package default, still trust every peer. A later release will make
+  an empty list trust nobody. UPGRADING.md has the migration.
+- The root module now needs Go 1.26 (toolchain go1.27.4). `golang.org/x/net`
+  moves to v0.61.0, which fixes GO-2026-6603, GO-2026-6610, GO-2026-6611,
+  GO-2026-6612 and GO-2026-6617.
+- The TypeScript client builds with pnpm. CI scans for vulnerabilities weekly
+  and uses panyam/ci-actions v0.1.4.
+
 ## [v0.2.4] - 2026-11-20
 
 ### Added
