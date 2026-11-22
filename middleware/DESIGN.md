@@ -4,22 +4,38 @@ purpose: Reusable, application-agnostic HTTP middleware for production hardening
 last_rebuilt: 04f5d50ab9801bba49c428990700c9aded8b119b
 depends_on:
 entities:
+  - name: TrustedProxies
+    kind: type
+    role: List of proxy prefixes with ClientIP (X-Forwarded-For walked right to left, skipping trusted hops), IsHTTPS (first X-Forwarded-Proto, else Forwarded proto=) and Contains.
+    why: Forwarding headers are client-supplied (CWE-348), so they count only when the TCP peer is listed; an empty list trusts nobody. Mirrors oneauth core.TrustedProxies (#67).
+  - name: ParseTrustedProxies
+    kind: func
+    role: Parses CIDRs and bare addresses into TrustedProxies.
+    why: Returns an error on a bad entry so operator typos fail at startup instead of trusting less than intended.
+  - name: CheckPlaintext
+    kind: func
+    role: Startup check returning ErrPlaintextCredentials for plain HTTP on a non-loopback address with no trusted proxies.
+    why: Catches a service meant to sit behind a proxy being started bare on a public port.
   - name: ClientIPExtractor
     kind: struct
-    role: Extracts the real client IP, honoring X-Forwarded-For / X-Real-IP only from trusted proxy CIDRs.
-    why: Spoofable forwarding headers are trusted only when RemoteAddr is in an allowlisted CIDR; an empty allowlist trusts everything for backwards-compat.
+    role: Older wrapper over TrustedProxies.ClientIP.
+    why: Kept for compatibility; an empty list still trusts every peer (0.0.0.0/0 and ::/0), which is deprecated.
   - name: NewClientIPExtractor
     kind: func
-    role: Builds an extractor from CIDR strings, auto-suffixing bare IPs with /32 or /128.
-    why: Lets config accept plain "127.0.0.1" or "::1" without forcing users to write CIDR masks; malformed entries are silently dropped.
+    role: Builds an extractor from CIDR strings or bare IPs.
+    why: Malformed entries are silently dropped and an empty result trusts everyone, both kept for compatibility; new code uses ParseTrustedProxies.
   - name: ClientIP
     kind: func
     role: Package-level convenience that extracts client IP via the shared default extractor.
     why: Used internally by logging/ratelimit/connlimit so all components see the same IP; configured globally via SetTrustedProxies.
   - name: SetTrustedProxies
     kind: func
-    role: Reconfigures the package-level default extractor.
-    why: Mutates global state — prefer NewClientIPExtractor for instance isolation; documented as a convenience-only path.
+    role: Reconfigures the package-level default extractor with NewClientIPExtractor's rules.
+    why: Mutates global state and keeps the deprecated trust-everyone default; prefer SetDefaultTrustedProxies.
+  - name: SetDefaultTrustedProxies
+    kind: func
+    role: Points the package-level ClientIP at a TrustedProxies, where empty trusts nobody.
+    why: Lets logging, conn limits, recovery and the default rate-limit key use the strict rules without a custom keyFunc.
   - name: RateLimiter
     kind: struct
     role: Enforces a global token-bucket limit plus per-key buckets with TTL-based cleanup of stale keys.
@@ -122,7 +138,7 @@ Design notes:
 
 - Nil-as-disable is the package's central convention. Constructors (NewBodyLimiter, NewConnLimiter, NewRateLimiter, NewOriginChecker) return nil when the feature should be off, and every method/Middleware has a nil-receiver guard that passes the request through. This lets a server wire all middleware unconditionally and disable individual ones purely via config.
 
-- IP attribution is centralized: ClientIP / the package-level defaultExtractor is the single source of truth, consumed by logging, ratelimit, and connlimit. Configure it once via SetTrustedProxies (or use per-instance ClientIPExtractor) so spoofed X-Forwarded-For headers are only honored behind trusted proxies.
+- IP attribution is centralized: ClientIP / the package-level defaultExtractor is the single source of truth, consumed by logging, ratelimit, and connlimit. Configure it once via SetDefaultTrustedProxies so spoofed X-Forwarded-For headers are only honored behind trusted proxies. The default trusts every peer until then, for compatibility.
 
 - The OriginChecker is deliberately reused for two distinct jobs: server-side WebSocket upgrade gating (where browser CORS does not apply) and CORS header reflection. Allow-all collapses to a nil checker in both cases.
 
