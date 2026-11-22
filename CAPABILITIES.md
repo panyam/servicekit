@@ -10,7 +10,7 @@
 - grpc-over-websocket: gRPC streaming over WebSocket via grpcws package
 - hybrid-transports: servicekit/hybrid submodule serves one proto service over grpcws, grpc-gateway JSON and Connect with one shared protojson config (ProtoJSON) and one router (Mux)
 - connect-to-grpc-bridge: hybrid/connectbridge.ConnectStreamBridge[T] adapts any Connect server stream (v1 *connect.ServerStream[T] or a v2 generated stream; anything with Send(*T) error) to grpc.ServerStreamingServer[T]
-- http-middleware: Guard, RateLimiter, ConnLimiter, BodyLimiter, OriginChecker, CORS, Recovery, RequestLogger, RequestID, HealthCheck
+- http-middleware: TrustedProxies (ClientIP, IsHTTPS), CheckPlaintext, Guard, RateLimiter, ConnLimiter, BodyLimiter, OriginChecker, CORS, Recovery, RequestLogger, RequestID, HealthCheck
 - server-timeouts: ApplyDefaults helper for sensible http.Server timeout defaults
 - sse-connection: SSEConn[O] for server-sent event connections with keepalive and codec support
 - sse-hub: SSEHub[O] generic session manager for SSE connections with register/broadcast/close

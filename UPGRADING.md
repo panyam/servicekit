@@ -1,5 +1,29 @@
 # Upgrading Guide
 
+## Trusted proxies: `TrustedProxies` replaces `ClientIPExtractor` (issue #67)
+
+Nothing breaks in this release. Two things change.
+
+1. **Explicit lists walk X-Forwarded-For right to left.** Say you trust `10.0.0.0/8` and a request from `10.0.0.1` carries `X-Forwarded-For: 1.2.3.4, 203.0.113.50`. The client wrote `1.2.3.4` itself, and your proxy appended `203.0.113.50`. `ClientIP` used to return `1.2.3.4`, so any client could pick its own rate-limit key. It now returns `203.0.113.50`. Trusted hops are skipped, and when every entry is trusted the leftmost wins.
+2. **The empty-list default is deprecated.** `NewClientIPExtractor(nil)`, `SetTrustedProxies(nil)` and the package default before any call trust every peer, so any client can set its own address. That still works, and still returns the leftmost entry, but a later release will make an empty list trust nobody.
+
+To move now:
+
+```go
+proxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxies) // errors on a bad entry
+if err != nil {
+    log.Fatal(err)
+}
+middleware.SetDefaultTrustedProxies(proxies) // replaces SetTrustedProxies; empty trusts nobody
+rl.Middleware(proxies.ClientIP)              // or nil to use the default above
+secure := proxies.IsHTTPS(r)                 // new: X-Forwarded-Proto / Forwarded proto=
+```
+
+If you relied on trust-everyone because only your proxy can reach the port, say so explicitly with `[]string{"0.0.0.0/0", "::/0"}`.
+
+Services that accept credentials can call `middleware.CheckPlaintext(addr, tlsOn, proxies)` at startup. It refuses plain HTTP on a non-loopback address unless trusted proxies are named.
+
+
 ## v0.1.x → v0.2.0
 
 v0.2.0 batches every breaking change we had queued. In order of how likely you are to hit it:

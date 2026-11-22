@@ -377,3 +377,30 @@ func TestClientIP_IntegrationSpoofAttempt(t *testing.T) {
 		t.Fatalf("SECURITY: attacker bypassed rate limit by spoofing XFF (got %d)", rr2.Code)
 	}
 }
+
+// A client behind a trusted proxy can prepend any address to
+// X-Forwarded-For. With named proxies the extractor must skip it.
+func TestClientIPExtractor_ForgedLeftmostXFF(t *testing.T) {
+	e := NewClientIPExtractor([]string{"10.0.0.0/8"})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.50")
+
+	if got := e.ExtractClientIP(req); got != "203.0.113.50" {
+		t.Errorf("expected the address the trusted proxy saw, got %q", got)
+	}
+}
+
+func TestSetDefaultTrustedProxies_EmptyTrustsNobody(t *testing.T) {
+	SetDefaultTrustedProxies(nil)
+	defer SetTrustedProxies(nil)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+
+	if got := ClientIP(req); got != "10.0.0.1" {
+		t.Errorf("expected the peer, got %q", got)
+	}
+}

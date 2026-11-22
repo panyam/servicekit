@@ -984,7 +984,8 @@ Production-grade HTTP/WebSocket middleware with zero app-specific imports. All c
 
 | Middleware | Purpose |
 |------------|---------|
-| **ClientIPExtractor** | Trusted proxy IP extraction (`X-Forwarded-For` / `X-Real-IP`) |
+| **TrustedProxies** | Client IP and HTTPS answers behind proxies (`X-Forwarded-For`, `X-Forwarded-Proto`, `Forwarded`); an empty list trusts nobody |
+| **ClientIPExtractor** | Older client-IP wrapper over `TrustedProxies` (empty list still trusts every peer; deprecated) |
 | **RateLimiter** | Token-bucket rate limiting (global + per-key with `KeyFunc`) |
 | **ConnLimiter** | Concurrent connection limiting (503 when full) |
 | **BodyLimiter** | Request body size limiting via `http.MaxBytesReader` (413 on exceed) |
@@ -996,6 +997,7 @@ Production-grade HTTP/WebSocket middleware with zero app-specific imports. All c
 | **HealthCheck** | Health/readiness endpoint (`http.Handler`) |
 | **Guard** | Composable middleware chain |
 | **ApplyDefaults** | `http.Server` timeout defaults (helper function) |
+| **CheckPlaintext** | Startup check: refuse credentials over plain HTTP on a non-loopback address |
 
 ### Quick Start
 
@@ -1024,6 +1026,25 @@ mux.Handle("/api/", guard.Wrap(apiHandler))
 srv := &http.Server{Addr: ":8080", Handler: mux}
 middleware.ApplyDefaults(srv)
 ```
+
+### Behind a proxy that ends TLS
+
+A Kubernetes ingress or cloud load balancer forwards plain HTTP and reports the client in headers. Anyone can send those headers, so name the proxies whose headers count:
+
+```go
+proxies, err := middleware.ParseTrustedProxies([]string{"10.0.0.0/8"}) // from a --trusted-proxy flag
+if err != nil {
+    log.Fatal(err)
+}
+if err := middleware.CheckPlaintext(srv.Addr, false, proxies); err != nil {
+    log.Fatal(err) // ":8080" with no TLS and no proxies is refused
+}
+middleware.SetDefaultTrustedProxies(proxies) // logging, conn limits, default rate-limit key
+
+http.SetCookie(w, &http.Cookie{Name: "session", Value: v, Secure: proxies.IsHTTPS(r)})
+```
+
+An empty list trusts nobody, so `ClientIP` returns the TCP peer and `IsHTTPS` reports only TLS this process ended itself.
 
 ## Testing
 
