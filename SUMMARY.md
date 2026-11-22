@@ -35,6 +35,17 @@ Both server and client use a two-layer architecture:
 
 **Key principle**: Control messages (ping/pong/error) are **always JSON** at the transport layer, regardless of what codec is used for data messages. This ensures consistent communication even with binary protocols.
 
+## Recent Changes (2026-11-22)
+
+### Trusted proxies (Issue #67, PR #68)
+- `middleware.TrustedProxies` answers `ClientIP(r)` and `IsHTTPS(r)` behind a proxy that ends TLS. An empty list trusts nobody. X-Forwarded-For is walked right to left, skipping trusted hops. `IsHTTPS` reads the first X-Forwarded-Proto, or `Forwarded` `proto=`
+- `CheckPlaintext(addr, tls, proxies)` refuses plain HTTP on a non-loopback address with no proxies named. `SetDefaultTrustedProxies` points the package-level `ClientIP` at a list
+- `ClientIPExtractor` wraps it. Its empty-list trust-everyone default is deprecated (UPGRADING.md). Mirrors oneauth's `core.TrustedProxies`
+
+### Hybrid exercise over TLS (Issue #61, PR #70)
+- `make -C hybrid exercise` runs `cmd/demo -check` in cleartext and again with `-tls` (`gohttp.WithTLS`, throwaway cert). Each run compares gateway JSON, Connect, gRPC-Web and grpcws. gRPC-Web over TLS uses HTTP/2
+- `hybrid` requires servicekit v0.2.4. CI uses panyam/ci-actions v0.1.4
+
 ## Recent Changes (2026-10-24)
 
 ### Standard Webhooks signing (`mcpkit#1578`, PR #59, v0.2.2)
@@ -170,7 +181,8 @@ Production-grade HTTP/WebSocket middleware components lifted from massrelay. All
 
 | Middleware | Purpose |
 |------------|---------|
-| **ClientIPExtractor** | Instance-based trusted proxy extraction (`X-Forwarded-For` / `X-Real-IP`) with configurable CIDR list |
+| **TrustedProxies** | Client IP and HTTPS answers from forwarding headers, only from listed proxies; empty trusts nobody |
+| **ClientIPExtractor** | Older wrapper over `TrustedProxies` (empty list trusts everyone, deprecated) |
 | **RateLimiter** | Token-bucket rate limiting with global + per-key support and configurable `KeyFunc` |
 | **ConnLimiter** | Concurrent connection limiting via atomic counter (503 when full) |
 | **OriginChecker** | WebSocket origin allowlist (exact, wildcard subdomain, localhost) |

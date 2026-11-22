@@ -5,9 +5,12 @@ Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
 ## At a glance
 
-- No active mission and no open threads. servicekit takes pushdowns from consumer missions (massrelay, mcpkit). Off-mission and ready: #15, #16 (P3). Parked with triggers: #12, #14, #21, #23, #24.
-- Likeliest next pushdown: panyam/mcpkit#267 (generic `RetryWithBackoff`, e.g. for webhook delivery retry), still `waiting` in mcpkit until a second consumer needs it. mcpkit#1576 (A2A signed webhooks) uses what v0.2.2 shipped.
-- This run: deleted the stale `origin/feat/observable-relay` (merged PR #58). master is the only remote branch.
+- No active mission and no open threads. servicekit takes pushdowns from consumer missions (massrelay, mcpkit). Off-mission and ready: #15, #16 (P3). Parked with triggers: #12, #14, #21, #23, #24, #69.
+- After the release that ships #68 (TrustedProxies): tag `hybrid/vX.Y.Z` to match, and open an agni issue to move `internal/authgate` to servicekit's type and `CheckPlaintext` (#67 asks for it).
+- #64: PRs in galore, massrelay, notations and tlex move them to ci-actions npm-publish. Once all four merge, delete `.github/workflows/npm-publish.yml` and close #64.
+- `TestWSLoad_SlowConsumer` (`http/load_test.go`) failed once on CI with "1 of 9 readers read fewer than 40 frames" and passed on rerun. File it if it recurs.
+- Likeliest next pushdown: panyam/mcpkit#267 (generic `RetryWithBackoff`), still `waiting` in mcpkit.
+- This run: no open threads to carry. Merged PRs #58, #62, #63, #66, #68 and #70 still have remote branches; delete them by hand.
 
 ## Across threads
 

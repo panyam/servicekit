@@ -228,7 +228,7 @@ The `middleware` package provides composable HTTP middleware with no application
 
 **Key design decisions:**
 
-1. **Instance-based `ClientIPExtractor`**: Replaces the package-global `trustedProxyCIDRs` pattern with an instance that holds its own CIDR list. A package-level `ClientIP(r)` convenience function uses a default extractor for backwards compatibility. This eliminates concurrency hazards when multiple listeners need different trust configs.
+1. **`TrustedProxies` for forwarding headers**: X-Forwarded-For, X-Real-IP, X-Forwarded-Proto and Forwarded count only when the TCP peer is a listed proxy, and an empty list trusts nobody (#67). `ClientIP` walks X-Forwarded-For right to left, because each trusted hop vouches for the entry to its left. `ClientIPExtractor` wraps it for compatibility, and the package-level `ClientIP(r)` uses a default set by `SetDefaultTrustedProxies`.
 
 2. **Generalized `RateLimiter` with `KeyFunc`**: The `Middleware(keyFunc)` method accepts a `func(*http.Request) string` that extracts the rate limit key. `nil` defaults to `ClientIP`. This generalizes per-IP limiting to per-anything (per-user, per-tenant, per-API-key).
 
@@ -242,7 +242,8 @@ The `middleware` package provides composable HTTP middleware with no application
 
 ```
 servicekit/middleware/
-├── clientip.go        # ClientIPExtractor (instance-based)
+├── trustedproxies.go  # TrustedProxies (ClientIP, IsHTTPS), CheckPlaintext
+├── clientip.go        # ClientIPExtractor, wrapper over TrustedProxies
 ├── ratelimit.go       # RateLimiter (global + per-key, KeyFunc)
 ├── connlimit.go       # ConnLimiter (atomic counter)
 ├── bodylimit.go       # BodyLimiter (request body size via MaxBytesReader)
