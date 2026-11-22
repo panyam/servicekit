@@ -36,7 +36,7 @@ jobs:
 
   publish:
     needs: test
-    uses: panyam/ci-actions/.github/workflows/npm-publish.yml@v0.1.1
+    uses: panyam/ci-actions/.github/workflows/npm-publish.yml@v0.1.4
     with:
       working-directory: clients/typescript
       package-manager: pnpm

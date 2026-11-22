@@ -27,7 +27,7 @@ Pre-push hook runs both `make test` and `make test-race` — all tests must pass
 - **No real gRPC server for tests** — grpcws integration tests use channel-driven test doubles satisfying the stream interfaces. No protobuf codegen needed.
 - **One version for Go and TS** — the Go module and `@panyam/servicekit-client` share the version under `## Version` in CAPABILITIES.md. A release bumps it there and in `clients/typescript/package.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` publishes the client at X.Y.Z through `publish-npm.yml`, which calls `panyam/ci-actions`' `npm-publish.yml` (npm trusted publishing, no token).
 - **The TS client uses pnpm.** Run `pnpm install --frozen-lockfile`, `pnpm run build` and `pnpm test` in `clients/typescript`. pnpm 12 runs esbuild's install script only because `pnpm-workspace.yaml` there allows it.
-- **This repo's `npm-publish.yml` is a leftover copy.** notations and galore still call it at `@master`, so keep it until they move to `panyam/ci-actions`.
+- **This repo's `npm-publish.yml` is a leftover copy.** galore, massrelay, notations and tlex still call it at `@master`, so keep it until they move to `panyam/ci-actions` (#64).
 
 ## Modules
 
