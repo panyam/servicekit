@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/gorilla/mux v1.8.1
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/panyam/gocurrent v0.1.1
 	github.com/panyam/goutils v0.1.8
 	github.com/prometheus/client_golang v1.24.1

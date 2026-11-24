@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	connectrpc.com/connect/v2 v2.0.2
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.32.0
 	github.com/panyam/servicekit v0.2.5
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941
