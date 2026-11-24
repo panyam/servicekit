@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). Releases up to v0.1.5 were tag-only
 and are not back-filled here.
 
+## [v0.2.6] - 2026-11-23
+
+### Fixed
+- `github.com/gorilla/websocket` moves to v1.5.4-0.20240701034025-d67f41855da4,
+  which fixes GO-2026-6278. A client's mask keys came from a weak PRNG, and now
+  come from `crypto/rand`. No tagged gorilla release has the fix yet. Both the
+  root module and `hybrid` require it, so a service built on either reads as
+  fixed under govulncheck.
+
 ## [v0.2.5] - 2026-11-22
 
 ### Added
